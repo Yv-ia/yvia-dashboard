@@ -43,6 +43,27 @@ Pour arrêter : `Ctrl + C` dans le terminal. Pour arrêter la base : `docker com
 - PostgreSQL via Docker : base de données locale
 - Vitest : tests automatisés (calculs de marge)
 
+## Utilisation avec Conductor
+
+Le fichier `conductor.json` branche deux scripts (dans `scripts/`) :
+
+- `scripts/worktree-up.sh` (script Conductor « setup ») : démarre la base, écrit
+  `.env`, installe les dépendances et crée les tables. Lancé à la création du workspace.
+- `scripts/worktree-down.sh` (script Conductor « archive ») : arrête la base.
+  Option `--purge` pour aussi effacer les données.
+
+Pour permettre **plusieurs workspaces en parallèle**, chaque workspace utilise des
+ports distincts fournis par Conductor : l'application sur `CONDUCTOR_PORT`, la base
+sur `CONDUCTOR_PORT + 1`. Hors Conductor, les ports par défaut sont 3000 (app) et
+5432 (base). C'est pourquoi `runScriptMode` est `concurrent`.
+
+Vous pouvez aussi lancer ces scripts à la main :
+
+```bash
+./scripts/worktree-up.sh     # tout démarrer
+./scripts/worktree-down.sh   # tout arrêter (données conservées)
+```
+
 ## Commandes utiles
 
 - `npm run dev` : démarrer en développement
