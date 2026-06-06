@@ -1,0 +1,15 @@
+# Dépendances installées (rechargées par "npm install", inutile de les versionner)
+node_modules/
+
+# Fichiers de build
+dist/
+build/
+
+# Variables d'environnement (secrets : mots de passe, URL de base de données)
+.env
+.env.*
+!.env.example
+
+# Logs et fichiers système
+*.log
+.DS_Store
