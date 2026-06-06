@@ -1,0 +1,24 @@
+# Décrit les services à lancer avec Docker. Ici, une base PostgreSQL locale.
+# Le port de la base est variable (DB_PORT) pour permettre plusieurs workspaces
+# Conductor en parallèle. Par défaut : 5432.
+# Pour la démarrer : docker compose up -d   (ou le script scripts/worktree-up.sh)
+# Pour l'arrêter   : docker compose down
+
+services:
+  db:
+    image: postgres:16 # version de PostgreSQL utilisée
+    # Pas de container_name fixe : Docker le préfixe avec le nom du projet,
+    # ce qui évite les collisions entre workspaces.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: suivi_marge
+    ports:
+      # port côté Mac (variable) -> port 5432 de la base dans le conteneur
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data # garde les données même si on arrête le conteneur
+
+volumes:
+  db_data:
