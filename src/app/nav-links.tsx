@@ -9,6 +9,7 @@ const liens = [
   { href: "/missions", label: "Missions" },
   { href: "/freelances", label: "Freelances" },
   { href: "/clients", label: "Clients" },
+  { href: "/statistiques", label: "Statistiques" },
 ];
 
 export function NavLinks() {
