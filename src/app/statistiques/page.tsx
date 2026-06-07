@@ -190,10 +190,8 @@ export default async function PageStatistiques({
           <Suspense>
             <StatsFiltres periode={periode} grouper={grouper} debut={debutMois} fin={finMois} />
           </Suspense>
-          <div>
-            <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Filtrer
-            </p>
+          <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
+            <span className="w-28 shrink-0 text-sm font-medium">Filtrer</span>
             <div className="flex flex-wrap gap-2">
               <Suspense>
                 <MultiSelectFiltre

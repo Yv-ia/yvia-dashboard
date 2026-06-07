@@ -5,13 +5,16 @@ import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { PERIODES, GROUPES } from "./stats-config";
 
-const chip = (actif: boolean) =>
-  `rounded-md px-3 py-1.5 text-sm ${
-    actif ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+// Élément d'un contrôle segmenté (fond clair, l'actif ressort en blanc + ombre).
+const seg = (actif: boolean) =>
+  `rounded-md px-3 py-1.5 text-sm transition-colors ${
+    actif
+      ? "bg-background font-medium text-foreground shadow-sm"
+      : "text-muted-foreground hover:text-foreground"
   }`;
 
 const inputCls =
-  "h-9 rounded-xl border border-transparent bg-secondary px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  "h-8 rounded-md border border-input bg-background px-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 export function StatsFiltres({
   periode,
@@ -38,13 +41,11 @@ export function StatsFiltres({
   return (
     <div className="space-y-3">
       {/* Période */}
-      <div>
-        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Période
-        </p>
-        <div className="flex flex-wrap gap-1">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <span className="w-28 shrink-0 text-sm font-medium">Période</span>
+        <div className="inline-flex flex-wrap gap-1 rounded-lg bg-secondary p-1">
           {PERIODES.map((x) => (
-            <Link key={x.key} href={lienAvec({ periode: x.key })} className={chip(periode === x.key)}>
+            <Link key={x.key} href={lienAvec({ periode: x.key })} className={seg(periode === x.key)}>
               {x.label}
             </Link>
           ))}
@@ -53,38 +54,39 @@ export function StatsFiltres({
 
       {/* Plage personnalisée (mois à mois) */}
       {periode === "perso" ? (
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            const fd = new FormData(e.currentTarget);
-            router.push(
-              lienAvec({
-                periode: "perso",
-                debut: String(fd.get("debut")),
-                fin: String(fd.get("fin")),
-              })
-            );
-          }}
-          className="flex flex-wrap items-center gap-2 text-sm"
-        >
-          <span>De</span>
-          <input type="month" name="debut" defaultValue={debut} className={inputCls} />
-          <span>à</span>
-          <input type="month" name="fin" defaultValue={fin} className={inputCls} />
-          <Button type="submit" size="sm">
-            Appliquer
-          </Button>
-        </form>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          <span className="hidden w-28 shrink-0 sm:block" />
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const fd = new FormData(e.currentTarget);
+              router.push(
+                lienAvec({
+                  periode: "perso",
+                  debut: String(fd.get("debut")),
+                  fin: String(fd.get("fin")),
+                })
+              );
+            }}
+            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+          >
+            <span>De</span>
+            <input type="month" name="debut" defaultValue={debut} className={inputCls} />
+            <span>à</span>
+            <input type="month" name="fin" defaultValue={fin} className={inputCls} />
+            <Button type="submit" size="sm">
+              Appliquer
+            </Button>
+          </form>
+        </div>
       ) : null}
 
       {/* Regrouper par */}
-      <div>
-        <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Regrouper par
-        </p>
-        <div className="flex flex-wrap gap-1">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <span className="w-28 shrink-0 text-sm font-medium">Regrouper par</span>
+        <div className="inline-flex flex-wrap gap-1 rounded-lg bg-secondary p-1">
           {GROUPES.map((x) => (
-            <Link key={x.key} href={lienAvec({ grouper: x.key })} className={chip(grouper === x.key)}>
+            <Link key={x.key} href={lienAvec({ grouper: x.key })} className={seg(grouper === x.key)}>
               {x.label}
             </Link>
           ))}

@@ -259,29 +259,30 @@ export default async function PagePlanning({
         </Card>
       ) : (
         <>
-          <div className="flex justify-end">
+          {/* Légende des couleurs + action, juste au-dessus du calendrier */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            {legende.length > 0 ? (
+              <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+                {legende.map((m) => (
+                  <span key={m.id} className="flex items-center gap-1.5">
+                    <span
+                      className="size-3 shrink-0 rounded-sm"
+                      style={{ backgroundColor: m.couleur.bg }}
+                    />
+                    <span className="font-medium">{m.nom}</span>
+                    <span className="text-muted-foreground">({m.clientNom})</span>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div />
+            )}
             <EtendreMoisButton
               annee={annee}
               mois={mois}
               libelleMoisSuivant={formatMois(suivant.annee, suivant.mois)}
             />
           </div>
-
-          {/* Légende des couleurs de missions */}
-          {legende.length > 0 ? (
-            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
-              {legende.map((m) => (
-                <span key={m.id} className="flex items-center gap-1.5">
-                  <span
-                    className="size-3 shrink-0 rounded-sm"
-                    style={{ backgroundColor: m.couleur.bg }}
-                  />
-                  <span className="font-medium">{m.nom}</span>
-                  <span className="text-muted-foreground">({m.clientNom})</span>
-                </span>
-              ))}
-            </div>
-          ) : null}
 
           <PlanningCalendar jours={jours} lignes={lignes} />
         </>
