@@ -43,6 +43,9 @@ export function FreelanceFormDialog({
         </DialogHeader>
 
         <form
+          // Remonte le formulaire si les valeurs changent (ex : après enregistrement
+          // et revalidation), au lieu de muter un champ déjà initialisé.
+          key={freelance ? `${freelance.id}:${freelance.prenom}:${freelance.nom}` : "new"}
           action={async (formData) => {
             const res = await action(formData);
             if (res.ok) {

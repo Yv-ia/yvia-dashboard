@@ -77,6 +77,7 @@ export default async function PagePlanning({
   const missionsDispo = await db
     .select({
       id: missions.id,
+      nom: missions.nom,
       freelanceId: missions.freelanceId,
       clientNom: clients.nom,
     })
@@ -89,6 +90,7 @@ export default async function PagePlanning({
       freelanceId: affectations.freelanceId,
       date: affectations.date,
       missionId: affectations.missionId,
+      missionNom: missions.nom,
       tjmAchat: affectations.tjmAchat,
       tjmVente: affectations.tjmVente,
       clientNom: clients.nom,
@@ -113,7 +115,13 @@ export default async function PagePlanning({
     const cellules: LigneFreelance["cellules"] = {};
     for (const a of affs) {
       if (a.freelanceId === f.id) {
-        cellules[a.date] = { clientNom: a.clientNom, couleur: couleurDe(a.missionId) };
+        cellules[a.date] = {
+          missionNom: a.missionNom,
+          clientNom: a.clientNom,
+          couleur: couleurDe(a.missionId),
+          tjmAchat: a.tjmAchat,
+          tjmVente: a.tjmVente,
+        };
       }
     }
     return {
@@ -121,7 +129,12 @@ export default async function PagePlanning({
       nom: `${f.prenom} ${f.nom}`,
       missions: missionsDispo
         .filter((m) => m.freelanceId === f.id)
-        .map((m) => ({ id: m.id, clientNom: m.clientNom, couleur: couleurDe(m.id) })),
+        .map((m) => ({
+          id: m.id,
+          nom: m.nom,
+          clientNom: m.clientNom,
+          couleur: couleurDe(m.id),
+        })),
       cellules,
     };
   });
@@ -131,6 +144,7 @@ export default async function PagePlanning({
     number,
     {
       missionId: number;
+      missionNom: string;
       clientNom: string;
       freelanceNom: string;
       jours: number;
@@ -144,6 +158,7 @@ export default async function PagePlanning({
     const e =
       parMission.get(a.missionId) ?? {
         missionId: a.missionId,
+        missionNom: a.missionNom,
         clientNom: a.clientNom,
         freelanceNom: `${a.prenom} ${a.nom}`,
         jours: 0,
@@ -234,6 +249,7 @@ export default async function PagePlanning({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Mission</TableHead>
                   <TableHead>Freelance</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">TJM achat</TableHead>
@@ -245,7 +261,8 @@ export default async function PagePlanning({
               <TableBody>
                 {detail.map((l) => (
                   <TableRow key={l.missionId}>
-                    <TableCell className="font-medium">{l.freelanceNom}</TableCell>
+                    <TableCell className="font-medium">{l.missionNom}</TableCell>
+                    <TableCell>{l.freelanceNom}</TableCell>
                     <TableCell>{l.clientNom}</TableCell>
                     <TableCell className="text-right">
                       {l.tjmAchat !== null ? formatEuro(l.tjmAchat) : "-"}
@@ -260,7 +277,7 @@ export default async function PagePlanning({
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={5} className="font-medium">
+                  <TableCell colSpan={6} className="font-medium">
                     Total
                   </TableCell>
                   <TableCell className="text-right font-medium">{formatEuro(totalMarge)}</TableCell>

@@ -55,6 +55,34 @@ export async function affecterJours(
   return { ok: true };
 }
 
+// Modifie le TJM (achat et/ou vente) d'un seul jour déjà posé.
+// L'affectation est unique par (freelance, date), donc on ne touche que cette case.
+export async function modifierTjmAffectation(
+  freelanceId: number,
+  date: string,
+  tjmAchat: string,
+  tjmVente: string
+): Promise<Resultat> {
+  if (!freelanceId || !date) return { ok: false, message: "Données manquantes." };
+  if (tjmAchat.trim() === "" || tjmVente.trim() === "") {
+    return { ok: false, message: "Les TJM achat et vente sont obligatoires." };
+  }
+  if (Number(tjmVente) < Number(tjmAchat)) {
+    return {
+      ok: false,
+      message: "Le TJM de vente doit être supérieur ou égal au TJM d'achat.",
+    };
+  }
+
+  await db
+    .update(affectations)
+    .set({ tjmAchat, tjmVente })
+    .where(and(eq(affectations.freelanceId, freelanceId), eq(affectations.date, date)));
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
 // Libère (vide) une liste de jours pour un freelance.
 export async function libererJours(
   freelanceId: number,

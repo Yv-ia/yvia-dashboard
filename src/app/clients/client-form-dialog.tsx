@@ -44,6 +44,9 @@ export function ClientFormDialog({
         </DialogHeader>
 
         <form
+          // Remonte le formulaire si les valeurs changent (ex : après enregistrement
+          // et revalidation), au lieu de muter un champ déjà initialisé.
+          key={client ? `${client.id}:${client.nom}` : "new"}
           action={async (formData) => {
             const res = await action(formData);
             if (res.ok) {

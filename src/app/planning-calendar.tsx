@@ -9,7 +9,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { affecterJours, libererJours } from "./planning-actions";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { affecterJours, libererJours, modifierTjmAffectation } from "./planning-actions";
 
 export type Jour = {
   date: string; // AAAA-MM-JJ
@@ -19,15 +21,29 @@ export type Jour = {
   ferie: boolean;
 };
 
-export type MissionOption = { id: number; clientNom: string; couleur: Couleur };
+export type MissionOption = {
+  id: number;
+  nom: string;
+  clientNom: string;
+  couleur: Couleur;
+};
 export type Couleur = { bg: string; fg: string };
 
 export type LigneFreelance = {
   id: number;
   nom: string;
   missions: MissionOption[]; // missions disponibles au planning pour ce freelance
-  // affectations: date -> mission affectée
-  cellules: Record<string, { clientNom: string; couleur: Couleur }>;
+  // affectations: date -> mission affectée (avec le TJM figé du jour)
+  cellules: Record<
+    string,
+    {
+      missionNom: string;
+      clientNom: string;
+      couleur: Couleur;
+      tjmAchat: string;
+      tjmVente: string;
+    }
+  >;
 };
 
 export function PlanningCalendar({
@@ -95,6 +111,25 @@ export function PlanningCalendar({
     fermerPopup();
   }
 
+  async function enregistrerTarifJour(tjmAchat: string, tjmVente: string) {
+    if (!popup) return;
+    const res = await modifierTjmAffectation(
+      popup.freelanceId,
+      popup.dates[0],
+      tjmAchat,
+      tjmVente
+    );
+    if (res.ok) toast.success("Tarif du jour mis à jour.");
+    else toast.error(res.message ?? "Erreur.");
+    fermerPopup();
+  }
+
+  // Case unique déjà occupée : on peut éditer son TJM directement.
+  const celluleUnique =
+    popup && popup.dates.length === 1 && ligneActive
+      ? ligneActive.cellules[popup.dates[0]] ?? null
+      : null;
+
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-card">
       <table className="border-collapse select-none text-sm">
@@ -146,9 +181,9 @@ export function PlanningCalendar({
                       <div
                         className="flex h-full w-full items-center justify-center overflow-hidden rounded-sm text-[10px] leading-none"
                         style={{ backgroundColor: cellule.couleur.bg, color: cellule.couleur.fg }}
-                        title={cellule.clientNom}
+                        title={`${cellule.missionNom} (client : ${cellule.clientNom})`}
                       >
-                        {cellule.clientNom.slice(0, 3)}
+                        {cellule.missionNom.slice(0, 3)}
                       </div>
                     ) : null}
                   </td>
@@ -171,6 +206,15 @@ export function PlanningCalendar({
             </DialogTitle>
           </DialogHeader>
 
+          {/* Édition du TJM d'un seul jour déjà posé */}
+          {celluleUnique ? (
+            <EditeurTarifJour
+              key={popup?.dates[0]}
+              tarif={celluleUnique}
+              onSave={enregistrerTarifJour}
+            />
+          ) : null}
+
           {ligneActive && ligneActive.missions.length > 0 ? (
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Affecter à la mission :</p>
@@ -181,10 +225,13 @@ export function PlanningCalendar({
                   className="flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-secondary"
                 >
                   <span
-                    className="size-4 rounded-sm"
+                    className="size-4 shrink-0 rounded-sm"
                     style={{ backgroundColor: m.couleur.bg }}
                   />
-                  {m.clientNom}
+                  <span className="flex flex-col leading-tight">
+                    <span className="font-medium">{m.nom}</span>
+                    <span className="text-xs text-muted-foreground">Client : {m.clientNom}</span>
+                  </span>
                 </button>
               ))}
             </div>
@@ -202,5 +249,59 @@ export function PlanningCalendar({
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// Petit formulaire d'édition du TJM d'un seul jour. Monté à neuf à chaque ouverture
+// du pop-up (clé sur la date), donc l'état part toujours des bonnes valeurs.
+function EditeurTarifJour({
+  tarif,
+  onSave,
+}: {
+  tarif: { tjmAchat: string; tjmVente: string };
+  onSave: (tjmAchat: string, tjmVente: string) => void;
+}) {
+  const [tjmAchat, setTjmAchat] = useState(tarif.tjmAchat);
+  const [tjmVente, setTjmVente] = useState(tarif.tjmVente);
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSave(tjmAchat, tjmVente);
+      }}
+      className="space-y-3 rounded-lg border border-border p-3"
+    >
+      <p className="text-sm font-medium">Tarif de ce jour</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="cell-achat">TJM achat (€ HT)</Label>
+          <Input
+            id="cell-achat"
+            type="number"
+            min="0"
+            step="1"
+            value={tjmAchat}
+            onChange={(e) => setTjmAchat(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="cell-vente">TJM vente (€ HT)</Label>
+          <Input
+            id="cell-vente"
+            type="number"
+            min="0"
+            step="1"
+            value={tjmVente}
+            onChange={(e) => setTjmVente(e.target.value)}
+            required
+          />
+        </div>
+      </div>
+      <Button type="submit" size="sm">
+        Enregistrer le tarif
+      </Button>
+    </form>
   );
 }

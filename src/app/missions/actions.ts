@@ -1,8 +1,8 @@
 "use server";
 
 import { db } from "@/db";
-import { missions } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { missions, affectations } from "@/db/schema";
+import { and, eq, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export type Resultat = { ok: boolean; message?: string };
@@ -59,6 +59,18 @@ export async function modifierMission(formData: FormData): Promise<Resultat> {
   if (!champs.ok) return { ok: false, message: champs.erreur };
 
   await db.update(missions).set(champs.valeurs).where(eq(missions.id, id));
+
+  // Option : recopier le nouveau TJM sur les jours déjà posés à partir d'aujourd'hui.
+  // Le passé n'est jamais modifié.
+  const appliquerAuxJoursPoses =
+    String(formData.get("appliquerAuxJoursPoses")) === "true";
+  if (appliquerAuxJoursPoses) {
+    const aujourdhui = new Date().toISOString().slice(0, 10); // "AAAA-MM-JJ"
+    await db
+      .update(affectations)
+      .set({ tjmAchat: champs.valeurs.tjmAchat, tjmVente: champs.valeurs.tjmVente })
+      .where(and(eq(affectations.missionId, id), gte(affectations.date, aujourdhui)));
+  }
 
   revalidatePath("/missions");
   revalidatePath("/");
