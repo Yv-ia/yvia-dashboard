@@ -29,7 +29,7 @@ type Mission = {
 
 // Style commun aux menus déroulants natifs (proche du champ Input de shadcn).
 const selectClass =
-  "border-input h-9 w-full rounded-md border bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:ring-2 focus-visible:ring-ring/50 outline-none";
+  "h-9 w-full rounded-xl border border-transparent bg-secondary px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 export function MissionFormDialog({
   action,

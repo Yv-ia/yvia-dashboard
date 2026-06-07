@@ -52,8 +52,6 @@ export default async function PageClients() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Société</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -61,8 +59,6 @@ export default async function PageClients() {
                 {liste.map((client) => (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium">{client.nom}</TableCell>
-                    <TableCell>{client.contactNom ?? "-"}</TableCell>
-                    <TableCell>{client.contactEmail ?? "-"}</TableCell>
                     <TableCell className="text-right">
                       <ClientFormDialog
                         action={modifierClient}

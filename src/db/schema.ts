@@ -16,7 +16,7 @@ export const freelances = pgTable("freelances", {
   id: serial("id").primaryKey(), // identifiant unique, généré automatiquement
   prenom: text("prenom").notNull(),
   nom: text("nom").notNull(),
-  email: text("email").notNull(),
+  email: text("email"), // facultatif
   actif: boolean("actif").notNull().default(true), // true = actif, false = inactif
   notes: text("notes"), // optionnel (peut être vide)
 });

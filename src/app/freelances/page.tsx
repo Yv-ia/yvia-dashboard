@@ -49,7 +49,6 @@ export default async function PageFreelances() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nom</TableHead>
-                  <TableHead>Email</TableHead>
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -60,7 +59,6 @@ export default async function PageFreelances() {
                     <TableCell className="font-medium">
                       {freelance.prenom} {freelance.nom}
                     </TableCell>
-                    <TableCell>{freelance.email}</TableCell>
                     <TableCell>{freelance.actif ? "Actif" : "Inactif"}</TableCell>
                     <TableCell className="text-right">
                       <FreelanceFormDialog

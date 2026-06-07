@@ -66,25 +66,6 @@ export function ClientFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="contactNom">Contact (nom)</Label>
-            <Input
-              id="contactNom"
-              name="contactNom"
-              defaultValue={client?.contactNom ?? ""}
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="contactEmail">Contact (email)</Label>
-            <Input
-              id="contactEmail"
-              name="contactEmail"
-              type="email"
-              defaultValue={client?.contactEmail ?? ""}
-            />
-          </div>
-
-          <div className="space-y-2">
             <Label htmlFor="notes">Notes</Label>
             <Input id="notes" name="notes" defaultValue={client?.notes ?? ""} />
           </div>
