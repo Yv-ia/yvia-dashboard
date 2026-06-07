@@ -1,7 +1,8 @@
 // Composant serveur : il lit les données directement dans la base, puis affiche la page.
 
 import { db } from "@/db";
-import { clients } from "@/db/schema";
+import { clients, missions, freelances } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,12 +19,40 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { ClientFormDialog } from "./client-form-dialog";
+import { ClientDetailDialog } from "./client-detail-dialog";
 import { DeleteClientButton } from "./delete-client-button";
 import { creerClient, modifierClient } from "./actions";
 
 export default async function PageClients() {
   // Lecture de tous les clients, triés par nom.
   const liste = await db.select().from(clients).orderBy(clients.nom);
+
+  // Missions par client (freelance + dates) pour la fiche détaillée.
+  const missionsRows = await db
+    .select({
+      clientId: missions.clientId,
+      freelanceNom: freelances.nom,
+      freelancePrenom: freelances.prenom,
+      dateDebut: missions.dateDebut,
+      dateFin: missions.dateFin,
+    })
+    .from(missions)
+    .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
+    .orderBy(missions.dateDebut);
+
+  const missionsParClient = new Map<
+    number,
+    { freelanceNom: string; dateDebut: string; dateFin: string | null }[]
+  >();
+  for (const m of missionsRows) {
+    const arr = missionsParClient.get(m.clientId) ?? [];
+    arr.push({
+      freelanceNom: `${m.freelancePrenom} ${m.freelanceNom}`,
+      dateDebut: m.dateDebut,
+      dateFin: m.dateFin,
+    });
+    missionsParClient.set(m.clientId, arr);
+  }
 
   return (
     <div className="space-y-6">
@@ -58,7 +87,12 @@ export default async function PageClients() {
               <TableBody>
                 {liste.map((client) => (
                   <TableRow key={client.id}>
-                    <TableCell className="font-medium">{client.nom}</TableCell>
+                    <TableCell>
+                      <ClientDetailDialog
+                        nom={client.nom}
+                        missions={missionsParClient.get(client.id) ?? []}
+                      />
+                    </TableCell>
                     <TableCell className="text-right">
                       <ClientFormDialog
                         action={modifierClient}

@@ -83,8 +83,7 @@ export default async function PagePlanning({
       clientNom: clients.nom,
     })
     .from(missions)
-    .innerJoin(clients, eq(missions.clientId, clients.id))
-    .where(eq(missions.disponiblePlanning, true));
+    .innerJoin(clients, eq(missions.clientId, clients.id));
 
   const affs = await db
     .select({
@@ -191,6 +190,14 @@ export default async function PagePlanning({
         </div>
       </div>
 
+      {/* Indicateurs (au-dessus du planning) */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Indicateur titre="CA prévisionnel" valeur={formatEuro(totalCa)} />
+        <Indicateur titre="Coût total" valeur={formatEuro(totalCout)} />
+        <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
+        <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
+      </div>
+
       {freelancesActifs.length === 0 ? (
         <Card>
           <CardContent className="py-6 text-sm text-muted-foreground">
@@ -205,14 +212,6 @@ export default async function PagePlanning({
           <PlanningCalendar jours={jours} lignes={lignes} />
         </>
       )}
-
-      {/* Indicateurs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Indicateur titre="CA prévisionnel" valeur={formatEuro(totalCa)} />
-        <Indicateur titre="Coût total" valeur={formatEuro(totalCout)} />
-        <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
-        <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
-      </div>
 
       {/* Détail par mission */}
       <Card>

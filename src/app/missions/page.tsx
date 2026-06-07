@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { missions, freelances, clients, tarifs } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { missions, freelances, clients, tarifs, affectations } from "@/db/schema";
+import { eq, gte } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -13,26 +13,16 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
-import { statutMission, type StatutMission } from "@/lib/calculs/statut-mission";
-import { formatEuro, formatDate } from "@/lib/format";
+import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
 import { DeleteMissionButton } from "./delete-mission-button";
-import { ToggleDisponibleButton } from "./toggle-disponible-button";
 import { creerMission, modifierMission } from "./actions";
 
-// Filtres par statut (slugs sans accent pour l'URL).
 const filtres = [
   { slug: "toutes", label: "Toutes" },
-  { slug: "en-cours", label: "En cours" },
-  { slug: "a-venir", label: "À venir" },
-  { slug: "terminee", label: "Terminées" },
+  { slug: "actives", label: "Actives" },
+  { slug: "inactives", label: "Inactives" },
 ] as const;
-
-const slugVersStatut: Record<string, StatutMission> = {
-  "en-cours": "en cours",
-  "a-venir": "à venir",
-  terminee: "terminée",
-};
 
 export default async function PageMissions({
   searchParams,
@@ -41,7 +31,6 @@ export default async function PageMissions({
 }) {
   const { statut: filtreActif = "toutes" } = await searchParams;
 
-  // Date du jour, pour le statut et le tarif courant.
   const maintenant = new Date();
   const aujourdhui = maintenant.toISOString().slice(0, 10);
   const annee = maintenant.getUTCFullYear();
@@ -55,7 +44,6 @@ export default async function PageMissions({
       clientId: missions.clientId,
       dateDebut: missions.dateDebut,
       dateFin: missions.dateFin,
-      disponiblePlanning: missions.disponiblePlanning,
       freelancePrenom: freelances.prenom,
       freelanceNom: freelances.nom,
       clientNom: clients.nom,
@@ -66,6 +54,13 @@ export default async function PageMissions({
     .orderBy(missions.dateDebut);
 
   const tousTarifs = await db.select().from(tarifs);
+
+  // Une mission est "active" si un freelance y est affecté aujourd'hui ou plus tard.
+  const affsActives = await db
+    .select({ missionId: affectations.missionId })
+    .from(affectations)
+    .where(gte(affectations.date, aujourdhui));
+  const missionsActives = new Set(affsActives.map((a) => a.missionId));
 
   // Listes pour les menus déroulants du formulaire.
   const freelancesActifs = await db
@@ -78,7 +73,6 @@ export default async function PageMissions({
     .from(clients)
     .orderBy(clients.nom);
 
-  // On enrichit chaque mission avec son statut et son tarif du mois courant.
   const lignes = missionsRows.map((m) => {
     const tarifsMission = tousTarifs
       .filter((t) => t.missionId === m.id)
@@ -88,14 +82,16 @@ export default async function PageMissions({
         tjmVente: Number(t.tjmVente),
       }));
     const tarifCourant = tarifDuMois(tarifsMission, annee, moisCourant);
-    const statut = statutMission(m.dateDebut, m.dateFin, aujourdhui);
-    return { ...m, statut, tarifCourant };
+    const actif = missionsActives.has(m.id);
+    return { ...m, actif, tarifCourant };
   });
 
   const lignesAffichees =
-    filtreActif === "toutes"
-      ? lignes
-      : lignes.filter((l) => l.statut === slugVersStatut[filtreActif]);
+    filtreActif === "actives"
+      ? lignes.filter((l) => l.actif)
+      : filtreActif === "inactives"
+        ? lignes.filter((l) => !l.actif)
+        : lignes;
 
   const peutCreer = freelancesActifs.length > 0 && clientsListe.length > 0;
 
@@ -119,7 +115,7 @@ export default async function PageMissions({
         )}
       </div>
 
-      {/* Filtres par statut */}
+      {/* Filtres */}
       <div className="flex gap-1">
         {filtres.map((f) => (
           <Link
@@ -154,9 +150,7 @@ export default async function PageMissions({
                   <TableHead className="text-right">TJM achat</TableHead>
                   <TableHead className="text-right">TJM vente</TableHead>
                   <TableHead className="text-right">Marge/jour</TableHead>
-                  <TableHead>Période</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead>Planning</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -178,13 +172,7 @@ export default async function PageMissions({
                         ? formatEuro(l.tarifCourant.tjmVente - l.tarifCourant.tjmAchat)
                         : "-"}
                     </TableCell>
-                    <TableCell>
-                      {formatDate(l.dateDebut)} → {formatDate(l.dateFin)}
-                    </TableCell>
-                    <TableCell>{l.statut}</TableCell>
-                    <TableCell>
-                      <ToggleDisponibleButton id={l.id} disponible={l.disponiblePlanning} />
-                    </TableCell>
+                    <TableCell>{l.actif ? "Actif" : "Inactif"}</TableCell>
                     <TableCell className="text-right">
                       <MissionFormDialog
                         action={modifierMission}

@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { freelances } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { freelances, missions, clients } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FreelanceFormDialog } from "./freelance-form-dialog";
+import { FreelanceDetailDialog } from "./freelance-detail-dialog";
 import { ToggleActifButton } from "./toggle-actif-button";
 import { creerFreelance, modifierFreelance } from "./actions";
 
@@ -21,6 +22,28 @@ export default async function PageFreelances() {
     .select()
     .from(freelances)
     .orderBy(desc(freelances.actif), freelances.nom);
+
+  // Missions par freelance (client + dates) pour la fiche détaillée.
+  const missionsRows = await db
+    .select({
+      freelanceId: missions.freelanceId,
+      clientNom: clients.nom,
+      dateDebut: missions.dateDebut,
+      dateFin: missions.dateFin,
+    })
+    .from(missions)
+    .innerJoin(clients, eq(missions.clientId, clients.id))
+    .orderBy(missions.dateDebut);
+
+  const missionsParFreelance = new Map<
+    number,
+    { clientNom: string; dateDebut: string; dateFin: string | null }[]
+  >();
+  for (const m of missionsRows) {
+    const arr = missionsParFreelance.get(m.freelanceId) ?? [];
+    arr.push({ clientNom: m.clientNom, dateDebut: m.dateDebut, dateFin: m.dateFin });
+    missionsParFreelance.set(m.freelanceId, arr);
+  }
 
   return (
     <div className="space-y-6">
@@ -56,8 +79,11 @@ export default async function PageFreelances() {
               <TableBody>
                 {liste.map((freelance) => (
                   <TableRow key={freelance.id} className={freelance.actif ? "" : "opacity-50"}>
-                    <TableCell className="font-medium">
-                      {freelance.prenom} {freelance.nom}
+                    <TableCell>
+                      <FreelanceDetailDialog
+                        nom={`${freelance.prenom} ${freelance.nom}`}
+                        missions={missionsParFreelance.get(freelance.id) ?? []}
+                      />
                     </TableCell>
                     <TableCell>{freelance.actif ? "Actif" : "Inactif"}</TableCell>
                     <TableCell className="text-right">
