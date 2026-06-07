@@ -83,7 +83,8 @@ export default async function PagePlanning({
       clientNom: clients.nom,
     })
     .from(missions)
-    .innerJoin(clients, eq(missions.clientId, clients.id));
+    .innerJoin(clients, eq(missions.clientId, clients.id))
+    .where(eq(missions.actif, true));
 
   const affs = await db
     .select({

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { missions, freelances, clients, tarifs, affectations } from "@/db/schema";
-import { eq, gte } from "drizzle-orm";
+import { missions, freelances, clients, tarifs } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -15,7 +15,7 @@ import {
 import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
 import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
-import { DeleteMissionButton } from "./delete-mission-button";
+import { ToggleActifMissionButton } from "./toggle-actif-mission-button";
 import { creerMission, modifierMission } from "./actions";
 
 const filtres = [
@@ -32,7 +32,6 @@ export default async function PageMissions({
   const { statut: filtreActif = "toutes" } = await searchParams;
 
   const maintenant = new Date();
-  const aujourdhui = maintenant.toISOString().slice(0, 10);
   const annee = maintenant.getUTCFullYear();
   const moisCourant = maintenant.getUTCMonth() + 1;
 
@@ -42,6 +41,7 @@ export default async function PageMissions({
       id: missions.id,
       freelanceId: missions.freelanceId,
       clientId: missions.clientId,
+      actif: missions.actif,
       freelancePrenom: freelances.prenom,
       freelanceNom: freelances.nom,
       clientNom: clients.nom,
@@ -49,16 +49,9 @@ export default async function PageMissions({
     .from(missions)
     .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
     .innerJoin(clients, eq(missions.clientId, clients.id))
-    .orderBy(missions.dateDebut);
+    .orderBy(missions.id);
 
   const tousTarifs = await db.select().from(tarifs);
-
-  // Une mission est "active" si un freelance y est affecté aujourd'hui ou plus tard.
-  const affsActives = await db
-    .select({ missionId: affectations.missionId })
-    .from(affectations)
-    .where(gte(affectations.date, aujourdhui));
-  const missionsActives = new Set(affsActives.map((a) => a.missionId));
 
   // Listes pour les menus déroulants du formulaire.
   const freelancesActifs = await db
@@ -81,8 +74,7 @@ export default async function PageMissions({
         tjmVente: Number(t.tjmVente),
       }));
     const tarifCourant = tarifDuMois(tarifsMission, annee, moisCourant);
-    const actif = missionsActives.has(m.id);
-    return { ...m, actif, tarifCourant };
+    return { ...m, tarifCourant };
   });
 
   const lignesAffichees =
@@ -190,10 +182,7 @@ export default async function PageMissions({
                           </Button>
                         }
                       />
-                      <DeleteMissionButton
-                        id={l.id}
-                        libelle={`${l.freelancePrenom} ${l.freelanceNom} / ${l.clientNom}`}
-                      />
+                      <ToggleActifMissionButton id={l.id} actif={l.actif} />
                     </TableCell>
                   </TableRow>
                 ))}

@@ -38,6 +38,12 @@ export async function creerMission(formData: FormData): Promise<Resultat> {
   if (tjmAchat === "" || tjmVente === "") {
     return { ok: false, message: "Les TJM achat et vente sont obligatoires." };
   }
+  if (Number(tjmVente) < Number(tjmAchat)) {
+    return {
+      ok: false,
+      message: "Le TJM de vente doit être supérieur ou égal au TJM d'achat.",
+    };
+  }
   const moisEffet = `${moisBrut}-01`; // 1er du mois
 
   // Transaction : mission + premier tarif réussissent (ou échouent) ensemble.
@@ -66,27 +72,14 @@ export async function modifierMission(formData: FormData): Promise<Resultat> {
   return { ok: true };
 }
 
-export async function supprimerMission(formData: FormData): Promise<Resultat> {
+// Active / désactive une mission (on ne supprime pas, pour garder l'historique).
+// Une mission inactive n'est plus proposée dans le planning.
+export async function basculerActifMission(formData: FormData): Promise<Resultat> {
   const id = Number(formData.get("id"));
+  const actif = String(formData.get("actif")) === "true";
   if (!id) return { ok: false, message: "Mission introuvable." };
 
-  // Les tarifs et absences liés sont supprimés automatiquement (cascade, voir le schéma).
-  await db.delete(missions).where(eq(missions.id, id));
-
-  revalidatePath("/missions");
-  return { ok: true };
-}
-
-// Active / désactive la disponibilité d'une mission dans le planning.
-export async function basculerDisponible(formData: FormData): Promise<Resultat> {
-  const id = Number(formData.get("id"));
-  const disponible = String(formData.get("disponible")) === "true";
-  if (!id) return { ok: false, message: "Mission introuvable." };
-
-  await db
-    .update(missions)
-    .set({ disponiblePlanning: !disponible })
-    .where(eq(missions.id, id));
+  await db.update(missions).set({ actif: !actif }).where(eq(missions.id, id));
 
   revalidatePath("/missions");
   revalidatePath("/");

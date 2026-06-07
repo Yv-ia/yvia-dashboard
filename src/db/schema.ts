@@ -50,6 +50,8 @@ export const missions = pgTable("missions", {
     .default("5"),
   // Interrupteur manuel : la mission est-elle proposée dans le pop-up du planning ?
   disponiblePlanning: boolean("disponible_planning").notNull().default(true),
+  // Statut manuel actif / inactif (bouton "Désactiver").
+  actif: boolean("actif").notNull().default(true),
 });
 
 // --- AFFECTATIONS (planning jour par jour) ---
