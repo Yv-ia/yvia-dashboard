@@ -193,7 +193,7 @@ export function PlanningCalendar({
         <thead>
           <tr>
             <th className="sticky left-0 z-10 min-w-44 border-b border-border bg-card px-3 py-2 text-left text-xs font-medium tracking-wide text-muted-foreground uppercase">
-              Freelance
+              Projet / Freelance
             </th>
             {jours.map((j) => (
               <th
@@ -243,14 +243,14 @@ export function PlanningCalendar({
                     }`}
                   >
                     {ev.length > 0 ? (
-                      <div className="flex h-full w-full flex-wrap items-center justify-center gap-0.5 leading-none">
+                      <div className="flex h-full w-full items-center justify-center gap-0.5 leading-none">
                         {nbEnc > 0 ? (
-                          <span className="rounded-sm bg-emerald-500 px-1 text-[9px] font-medium text-white">
+                          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-semibold text-white ring-1 ring-emerald-700/30">
                             {nbEnc}
                           </span>
                         ) : null}
                         {nbDec > 0 ? (
-                          <span className="rounded-sm bg-rose-500 px-1 text-[9px] font-medium text-white">
+                          <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white ring-1 ring-rose-700/30">
                             {nbDec}
                           </span>
                         ) : null}
