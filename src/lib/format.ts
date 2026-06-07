@@ -14,6 +14,13 @@ export function formatJours(jours: number): string {
   return new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(jours);
 }
 
+// Mois en toutes lettres, ex : (2026, 6) -> "juin 2026".
+export function formatMois(annee: number, mois: number): string {
+  return new Intl.DateTimeFormat("fr-FR", { month: "long", year: "numeric" }).format(
+    new Date(Date.UTC(annee, mois - 1, 1))
+  );
+}
+
 // Date "AAAA-MM-JJ" -> "JJ/MM/AAAA". Renvoie "-" si vide.
 export function formatDate(dateISO: string | null): string {
   if (!dateISO) return "-";
