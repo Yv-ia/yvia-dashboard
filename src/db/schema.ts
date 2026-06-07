@@ -21,6 +21,18 @@ export const users = pgTable("users", {
   nom: text("nom"), // nom affiché, optionnel
 });
 
+// --- INVITATIONS (lien d'invitation pour créer un compte associé) ---
+// Un associé connecté génère une invitation pour un email donné ; l'invité
+// ouvre le lien et choisit son mot de passe. Usage unique, avec expiration.
+export const invitations = pgTable("invitations", {
+  id: serial("id").primaryKey(),
+  token: text("token").notNull().unique(),
+  email: text("email").notNull(),
+  nom: text("nom"),
+  expireLe: text("expire_le").notNull(), // date/heure ISO
+  utilisee: boolean("utilisee").notNull().default(false),
+});
+
 // --- FREELANCES ---
 export const freelances = pgTable("freelances", {
   id: serial("id").primaryKey(), // identifiant unique, généré automatiquement

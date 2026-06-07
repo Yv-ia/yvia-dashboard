@@ -42,9 +42,12 @@ export default async function RootLayout({
               </Link>
               <NavLinks />
               <div className="ml-auto flex items-center gap-3">
-                <span className="hidden text-sm text-muted-foreground sm:inline">
+                <Link
+                  href="/parametres"
+                  className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
+                >
                   {session.email}
-                </span>
+                </Link>
                 <LogoutButton />
               </div>
             </nav>

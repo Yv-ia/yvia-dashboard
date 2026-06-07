@@ -5,15 +5,17 @@ import { verifierSession, SESSION_COOKIE } from "@/lib/auth/session";
 export async function middleware(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const session = await verifierSession(token);
-  const surLogin = req.nextUrl.pathname === "/login";
+  const { pathname } = req.nextUrl;
+  // Pages accessibles sans être connecté : connexion et acceptation d'invitation.
+  const estPublique = pathname === "/login" || pathname.startsWith("/invitation/");
 
-  if (!session && !surLogin) {
+  if (!session && !estPublique) {
     const url = req.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
   // Déjà connecté et sur /login : on renvoie vers l'accueil.
-  if (session && surLogin) {
+  if (session && pathname === "/login") {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);
