@@ -1,13 +1,16 @@
 import { Suspense } from "react";
 import { db } from "@/db";
 import { affectations, missions, clients, freelances } from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
 import { StatsFiltres } from "./stats-filtres";
 import { PERIODES, GROUPES } from "./stats-config";
 import { StatsTable, type LigneStat } from "./stats-table";
+import { StatsGraphe } from "./stats-graphe";
+import { StatsExport } from "./stats-export";
+import { MultiSelectFiltre } from "./multi-select-filtre";
 
 const arrondi = (n: number) => Math.round(n * 100) / 100;
 
@@ -51,7 +54,15 @@ function bornesPeriode(
 export default async function PageStatistiques({
   searchParams,
 }: {
-  searchParams: Promise<{ periode?: string; grouper?: string; debut?: string; fin?: string }>;
+  searchParams: Promise<{
+    periode?: string;
+    grouper?: string;
+    debut?: string;
+    fin?: string;
+    freelances?: string;
+    clients?: string;
+    missions?: string;
+  }>;
 }) {
   const params = await searchParams;
   const maintenant = new Date();
@@ -65,7 +76,22 @@ export default async function PageStatistiques({
 
   const { debut, fin } = bornesPeriode(periode, debutMois, finMois, annee, mois);
 
-  // Tous les jours posés de la période, avec leurs dimensions.
+  // Filtres optionnels (ids séparés par des virgules dans l'URL).
+  const ids = (v?: string) =>
+    (v ?? "")
+      .split(",")
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  const selFreelances = ids(params.freelances);
+  const selClients = ids(params.clients);
+  const selMissions = ids(params.missions);
+
+  const conditions = [gte(affectations.date, debut), lte(affectations.date, fin)];
+  if (selFreelances.length) conditions.push(inArray(affectations.freelanceId, selFreelances));
+  if (selClients.length) conditions.push(inArray(missions.clientId, selClients));
+  if (selMissions.length) conditions.push(inArray(affectations.missionId, selMissions));
+
+  // Tous les jours posés de la période (et des filtres), avec leurs dimensions.
   const rows = await db
     .select({
       date: affectations.date,
@@ -83,7 +109,21 @@ export default async function PageStatistiques({
     .innerJoin(missions, eq(affectations.missionId, missions.id))
     .innerJoin(clients, eq(missions.clientId, clients.id))
     .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
-    .where(and(gte(affectations.date, debut), lte(affectations.date, fin)));
+    .where(and(...conditions));
+
+  // Listes pour les filtres multi-sélection.
+  const [optFreelances, optClients, optMissions] = await Promise.all([
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .orderBy(freelances.nom),
+    db.select({ id: clients.id, nom: clients.nom }).from(clients).orderBy(clients.nom),
+    db
+      .select({ id: missions.id, nom: missions.nom, clientNom: clients.nom })
+      .from(missions)
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .orderBy(missions.nom),
+  ]);
 
   // Indicateurs globaux de la période.
   const caTotal = arrondi(rows.reduce((s, r) => s + Number(r.tjmVente), 0));
@@ -146,10 +186,43 @@ export default async function PageStatistiques({
       <h1 className="font-display text-3xl">Statistiques</h1>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardContent className="space-y-3 pt-6">
           <Suspense>
             <StatsFiltres periode={periode} grouper={grouper} debut={debutMois} fin={finMois} />
           </Suspense>
+          <div>
+            <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Filtrer
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Suspense>
+                <MultiSelectFiltre
+                  label="Freelances"
+                  paramName="freelances"
+                  selected={selFreelances.map(String)}
+                  options={optFreelances.map((f) => ({
+                    value: String(f.id),
+                    label: `${f.prenom} ${f.nom}`,
+                  }))}
+                />
+                <MultiSelectFiltre
+                  label="Clients"
+                  paramName="clients"
+                  selected={selClients.map(String)}
+                  options={optClients.map((c) => ({ value: String(c.id), label: c.nom }))}
+                />
+                <MultiSelectFiltre
+                  label="Missions"
+                  paramName="missions"
+                  selected={selMissions.map(String)}
+                  options={optMissions.map((m) => ({
+                    value: String(m.id),
+                    label: `${m.nom} (${m.clientNom})`,
+                  }))}
+                />
+              </Suspense>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -165,15 +238,21 @@ export default async function PageStatistiques({
 
       <Card>
         <CardHeader>
-          <CardTitle>Détail par {labelColonne.toLowerCase()}</CardTitle>
+          <div className="flex items-center justify-between gap-4">
+            <CardTitle>Détail par {labelColonne.toLowerCase()}</CardTitle>
+            <StatsExport lignes={lignes} labelColonne={labelColonne} />
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
           {lignes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               Aucune donnée sur cette période. Ajustez les filtres ou remplissez le planning.
             </p>
           ) : (
-            <StatsTable lignes={lignes} labelColonne={labelColonne} />
+            <>
+              <StatsGraphe lignes={lignes} />
+              <StatsTable lignes={lignes} labelColonne={labelColonne} />
+            </>
           )}
         </CardContent>
       </Card>
