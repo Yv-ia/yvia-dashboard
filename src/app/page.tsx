@@ -35,13 +35,19 @@ const moisPrecedent = (a: number, m: number) =>
   m === 1 ? { annee: a - 1, mois: 12 } : { annee: a, mois: m - 1 };
 
 // Palette pour distinguer les missions dans le planning.
+// Teintes volontairement contrastées (hues différents) pour ne pas confondre
+// deux missions voisines. Le bleu de marque reste en premier.
 const PALETTE: Couleur[] = [
-  { bg: "#0571ed", fg: "#ffffff" },
-  { bg: "#0b172b", fg: "#ffffff" },
-  { bg: "#3794ff", fg: "#ffffff" },
-  { bg: "#52698f", fg: "#ffffff" },
-  { bg: "#0f5bb3", fg: "#ffffff" },
-  { bg: "#a5d8e1", fg: "#0b172b" },
+  { bg: "#0571ed", fg: "#ffffff" }, // bleu
+  { bg: "#f97316", fg: "#ffffff" }, // orange
+  { bg: "#16a34a", fg: "#ffffff" }, // vert
+  { bg: "#9333ea", fg: "#ffffff" }, // violet
+  { bg: "#e11d48", fg: "#ffffff" }, // rose/rouge
+  { bg: "#0891b2", fg: "#ffffff" }, // cyan
+  { bg: "#ca8a04", fg: "#ffffff" }, // jaune foncé
+  { bg: "#4f46e5", fg: "#ffffff" }, // indigo
+  { bg: "#db2777", fg: "#ffffff" }, // magenta
+  { bg: "#65a30d", fg: "#ffffff" }, // vert lime
 ];
 
 const LETTRES = ["D", "L", "M", "M", "J", "V", "S"];
