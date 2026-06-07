@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { db } from "@/db";
-import { clients, missions, freelances } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { clients, missions, freelances, affectations } from "@/db/schema";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { ClientFormDialog } from "./client-form-dialog";
 import { ClientDetailDialog } from "./client-detail-dialog";
 import { ArchiveClientButton } from "./archive-client-button";
@@ -39,21 +40,58 @@ export default async function PageClients({
     .where(eq(clients.actif, !archives))
     .orderBy(clients.nom);
 
-  // Freelances placés par client, pour la fiche détaillée.
+  // Missions par client (freelance + TJM vente) pour la fiche détaillée.
   const missionsRows = await db
     .select({
       clientId: missions.clientId,
+      missionNom: missions.nom,
       freelanceNom: freelances.nom,
       freelancePrenom: freelances.prenom,
+      tjmVente: missions.tjmVente,
+      actif: missions.actif,
     })
     .from(missions)
     .innerJoin(freelances, eq(missions.freelanceId, freelances.id));
 
-  const missionsParClient = new Map<number, { freelanceNom: string }[]>();
+  type MissionFiche = {
+    missionNom: string;
+    freelanceNom: string;
+    tjmVente: string;
+    actif: boolean;
+  };
+  const missionsParClient = new Map<number, MissionFiche[]>();
   for (const m of missionsRows) {
     const arr = missionsParClient.get(m.clientId) ?? [];
-    arr.push({ freelanceNom: `${m.freelancePrenom} ${m.freelanceNom}` });
+    arr.push({
+      missionNom: m.missionNom,
+      freelanceNom: `${m.freelancePrenom} ${m.freelanceNom}`,
+      tjmVente: m.tjmVente,
+      actif: m.actif,
+    });
     missionsParClient.set(m.clientId, arr);
+  }
+
+  // Stats du mois courant par client : jours facturés + CA.
+  const maintenant = new Date();
+  const annee = maintenant.getUTCFullYear();
+  const mois = maintenant.getUTCMonth() + 1;
+  const affsMois = await db
+    .select({ clientId: missions.clientId, tjmVente: affectations.tjmVente })
+    .from(affectations)
+    .innerJoin(missions, eq(affectations.missionId, missions.id))
+    .where(
+      and(
+        gte(affectations.date, premierJourDuMois(annee, mois)),
+        lte(affectations.date, dernierJourDuMois(annee, mois))
+      )
+    );
+
+  const statsParClient = new Map<number, { jours: number; ca: number }>();
+  for (const a of affsMois) {
+    const s = statsParClient.get(a.clientId) ?? { jours: 0, ca: 0 };
+    s.jours += 1;
+    s.ca += Number(a.tjmVente);
+    statsParClient.set(a.clientId, s);
   }
 
   return (
@@ -116,6 +154,7 @@ export default async function PageClients({
                       <ClientDetailDialog
                         nom={client.nom}
                         missions={missionsParClient.get(client.id) ?? []}
+                        stats={statsParClient.get(client.id) ?? { jours: 0, ca: 0 }}
                       />
                     </TableCell>
                     <TableCell className="text-right">

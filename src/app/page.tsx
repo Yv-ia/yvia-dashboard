@@ -17,6 +17,7 @@ import { estJourFerie } from "@/lib/calculs/jours-feries";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
 import { PlanningCalendar, type Couleur, type LigneFreelance, type Jour } from "./planning-calendar";
+import { EtendreMoisButton } from "./etendre-mois-button";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const moisSuivant = (a: number, m: number) =>
@@ -52,7 +53,8 @@ export default async function PagePlanning({
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
 
-  // Jours du mois (avec week-ends et jours fériés).
+  // Jours du mois (avec week-ends, jours fériés, et repérage d'aujourd'hui).
+  const aujourdhuiISO = maintenant.toISOString().slice(0, 10);
   const nbJours = Number(finMois.slice(8, 10));
   const jours: Jour[] = [];
   for (let d = 1; d <= nbJours; d++) {
@@ -64,6 +66,7 @@ export default async function PagePlanning({
       lettre: LETTRES[dow],
       weekend: dow === 0 || dow === 6,
       ferie: estJourFerie(date),
+      estAujourdhui: date === aujourdhuiISO,
     });
   }
 
@@ -109,6 +112,19 @@ export default async function PagePlanning({
   ).sort((a, b) => a - b);
   const couleurDe = (missionId: number): Couleur =>
     PALETTE[idsMissions.indexOf(missionId) % PALETTE.length];
+
+  // Légende : pour chaque mission affichée dans la grille, sa couleur, son nom et son client.
+  const infosMission = new Map<number, { nom: string; clientNom: string }>();
+  for (const m of missionsDispo) infosMission.set(m.id, { nom: m.nom, clientNom: m.clientNom });
+  for (const a of affs)
+    if (!infosMission.has(a.missionId))
+      infosMission.set(a.missionId, { nom: a.missionNom, clientNom: a.clientNom });
+  const legende = idsMissions
+    .map((id) => {
+      const info = infosMission.get(id);
+      return info ? { id, ...info, couleur: couleurDe(id) } : null;
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 
   // Lignes de la grille (une par freelance actif).
   const lignes: LigneFreelance[] = freelancesActifs.map((f) => {
@@ -209,6 +225,11 @@ export default async function PagePlanning({
             nativeButton={false}
             render={<Link href={`/?annee=${suivant.annee}&mois=${suivant.mois}`}>Mois suivant</Link>}
           />
+          <EtendreMoisButton
+            annee={annee}
+            mois={mois}
+            libelleMoisSuivant={formatMois(suivant.annee, suivant.mois)}
+          />
         </div>
       </div>
 
@@ -229,8 +250,26 @@ export default async function PagePlanning({
       ) : (
         <>
           <p className="text-sm text-muted-foreground">
-            Cliquez-glissez sur une ligne pour sélectionner des jours, puis choisissez la mission.
+            Cliquez-glissez sur une ligne pour sélectionner des jours, puis choisissez la
+            mission. Cliquez sur un jour déjà posé pour modifier son tarif.
           </p>
+
+          {/* Légende des couleurs de missions */}
+          {legende.length > 0 ? (
+            <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs">
+              {legende.map((m) => (
+                <span key={m.id} className="flex items-center gap-1.5">
+                  <span
+                    className="size-3 shrink-0 rounded-sm"
+                    style={{ backgroundColor: m.couleur.bg }}
+                  />
+                  <span className="font-medium">{m.nom}</span>
+                  <span className="text-muted-foreground">({m.clientNom})</span>
+                </span>
+              ))}
+            </div>
+          ) : null}
+
           <PlanningCalendar jours={jours} lignes={lignes} />
         </>
       )}

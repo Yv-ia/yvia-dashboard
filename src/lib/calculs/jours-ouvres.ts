@@ -37,3 +37,19 @@ export function joursOuvres(debutISO: string, finISO: string): number {
 export function joursOuvresDuMois(annee: number, mois: number): number {
   return joursOuvres(premierJourDuMois(annee, mois), dernierJourDuMois(annee, mois));
 }
+
+// Liste ordonnée des jours ouvrés d'un mois, en texte "AAAA-MM-JJ".
+export function listeJoursOuvresDuMois(annee: number, mois: number): string[] {
+  const dates: string[] = [];
+  let courant = new Date(premierJourDuMois(annee, mois) + "T00:00:00Z");
+  const fin = new Date(dernierJourDuMois(annee, mois) + "T00:00:00Z");
+  while (courant.getTime() <= fin.getTime()) {
+    const jourSemaine = courant.getUTCDay();
+    const dateTexte = courant.toISOString().slice(0, 10);
+    if (jourSemaine !== 0 && jourSemaine !== 6 && !estJourFerie(dateTexte)) {
+      dates.push(dateTexte);
+    }
+    courant = new Date(courant.getTime() + 24 * 60 * 60 * 1000);
+  }
+  return dates;
+}

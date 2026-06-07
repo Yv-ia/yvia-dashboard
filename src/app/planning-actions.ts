@@ -2,8 +2,13 @@
 
 import { db } from "@/db";
 import { affectations, missions } from "@/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import {
+  premierJourDuMois,
+  dernierJourDuMois,
+  listeJoursOuvresDuMois,
+} from "@/lib/calculs/jours-ouvres";
 
 export type Resultat = { ok: boolean; message?: string };
 
@@ -49,6 +54,80 @@ export async function affecterJours(
         tjmVente: m.tjmVente,
       }))
     );
+  });
+
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Étend le planning d'un mois sur le mois suivant : on recopie chaque affectation
+// sur le jour ouvré de même rang dans le mois suivant (1er jour ouvré -> 1er, etc.),
+// en gardant la mission et le TJM figé. Les jours cibles déjà posés sont remplacés.
+export async function etendreAuMoisSuivant(
+  annee: number,
+  mois: number
+): Promise<Resultat> {
+  const suivant = mois === 12 ? { a: annee + 1, m: 1 } : { a: annee, m: mois + 1 };
+
+  const joursSource = listeJoursOuvresDuMois(annee, mois);
+  const joursCible = listeJoursOuvresDuMois(suivant.a, suivant.m);
+  const rangDe = new Map(joursSource.map((d, i) => [d, i]));
+
+  // Affectations du mois source.
+  const affsSource = await db
+    .select({
+      freelanceId: affectations.freelanceId,
+      missionId: affectations.missionId,
+      date: affectations.date,
+      tjmAchat: affectations.tjmAchat,
+      tjmVente: affectations.tjmVente,
+    })
+    .from(affectations)
+    .where(
+      and(
+        gte(affectations.date, premierJourDuMois(annee, mois)),
+        lte(affectations.date, dernierJourDuMois(annee, mois))
+      )
+    );
+
+  // On ne recopie que les jours ouvrés (les week-ends/fériés posés sont ignorés).
+  const nouvelles = affsSource
+    .map((a) => {
+      const rang = rangDe.get(a.date);
+      if (rang === undefined) return null;
+      const cible = joursCible[rang];
+      if (!cible) return null; // pas assez de jours ouvrés le mois suivant
+      return {
+        freelanceId: a.freelanceId,
+        missionId: a.missionId,
+        date: cible,
+        tjmAchat: a.tjmAchat,
+        tjmVente: a.tjmVente,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+
+  if (nouvelles.length === 0) {
+    return { ok: false, message: "Aucun jour ouvré à étendre sur le mois suivant." };
+  }
+
+  // Jours cibles par freelance, pour remplacer proprement l'existant (unicité freelance+jour).
+  const ciblesParFreelance = new Map<number, string[]>();
+  for (const n of nouvelles) {
+    const arr = ciblesParFreelance.get(n.freelanceId) ?? [];
+    arr.push(n.date);
+    ciblesParFreelance.set(n.freelanceId, arr);
+  }
+
+  await db.transaction(async (tx) => {
+    for (const [freelanceId, dates] of ciblesParFreelance) {
+      await tx
+        .delete(affectations)
+        .where(
+          and(eq(affectations.freelanceId, freelanceId), inArray(affectations.date, dates))
+        );
+    }
+    await tx.insert(affectations).values(nouvelles);
   });
 
   revalidatePath("/");

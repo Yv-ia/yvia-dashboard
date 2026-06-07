@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { affecterJours, libererJours, modifierTjmAffectation } from "./planning-actions";
 
 export type Jour = {
@@ -19,6 +20,7 @@ export type Jour = {
   lettre: string; // L, M, M, J, V, S, D
   weekend: boolean;
   ferie: boolean;
+  estAujourdhui: boolean;
 };
 
 export type MissionOption = {
@@ -141,13 +143,23 @@ export function PlanningCalendar({
             {jours.map((j) => (
               <th
                 key={j.date}
-                className={`w-9 border-b border-l border-border px-0 py-1 text-center text-xs font-medium ${
-                  j.weekend || j.ferie ? "bg-secondary text-muted-foreground" : "text-muted-foreground"
+                className={`w-9 border-b border-l px-0 py-1 text-center text-xs font-medium ${
+                  j.estAujourdhui
+                    ? "border-primary bg-primary/10 text-primary"
+                    : `border-border ${
+                        j.weekend || j.ferie
+                          ? "bg-secondary text-muted-foreground"
+                          : "text-muted-foreground"
+                      }`
                 }`}
-                title={j.ferie ? "Jour férié" : undefined}
+                title={
+                  j.estAujourdhui ? "Aujourd'hui" : j.ferie ? "Jour férié" : undefined
+                }
               >
                 <div>{j.lettre}</div>
-                <div className="text-foreground">{j.num}</div>
+                <div className={j.estAujourdhui ? "text-primary" : "text-foreground"}>
+                  {j.num}
+                </div>
               </th>
             ))}
           </tr>
@@ -173,7 +185,9 @@ export function PlanningCalendar({
                         setSelection({ ...selection, fin: index });
                       }
                     }}
-                    className={`h-9 w-9 cursor-pointer border-b border-l border-border p-0.5 text-center align-middle ${
+                    className={`h-9 w-9 cursor-pointer border-b border-l p-0.5 text-center align-middle ${
+                      j.estAujourdhui ? "border-l-primary bg-primary/5" : "border-l-border"
+                    } border-b-border ${
                       j.weekend || j.ferie ? "bg-secondary/60" : ""
                     } ${selectionnee ? "ring-2 ring-inset ring-primary" : ""}`}
                   >
@@ -242,9 +256,18 @@ export function PlanningCalendar({
           )}
 
           <div className="pt-2">
-            <Button variant="outline" size="sm" onClick={liberer}>
-              Libérer ces jours
-            </Button>
+            <ConfirmDialog
+              trigger={
+                <Button variant="outline" size="sm">
+                  Libérer ces jours
+                </Button>
+              }
+              titre="Libérer ces jours ?"
+              description="Les affectations sélectionnées seront retirées du planning."
+              confirmLabel="Libérer"
+              destructif
+              onConfirm={liberer}
+            />
           </div>
         </DialogContent>
       </Dialog>
