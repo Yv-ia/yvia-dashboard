@@ -1,6 +1,14 @@
 import { Suspense } from "react";
 import { db } from "@/db";
-import { affectations, missions, clients, freelances } from "@/db/schema";
+import {
+  affectations,
+  missions,
+  clients,
+  freelances,
+  projets,
+  encaissements,
+  decaissements,
+} from "@/db/schema";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
@@ -124,43 +132,128 @@ export default async function PageStatistiques({
       .orderBy(missions.nom),
   ]);
 
-  // Indicateurs globaux de la période.
-  const caTotal = arrondi(rows.reduce((s, r) => s + Number(r.tjmVente), 0));
-  const coutTotal = arrondi(rows.reduce((s, r) => s + Number(r.tjmAchat), 0));
+  // Forfait : on n'inclut pas les projets si un filtre "missions" est posé (un projet
+  // n'est pas une mission). Les encaissements n'ont pas de freelance : on les exclut
+  // si un filtre "freelances" est actif.
+  const forfaitActif = selMissions.length === 0;
+  type EncForfait = { date: string; montant: string; projetId: number; projetNom: string; clientId: number; clientNom: string };
+  type DecForfait = EncForfait & { freelanceId: number; freelancePrenom: string; freelanceNom: string };
+  let encForfait: EncForfait[] = [];
+  let decForfait: DecForfait[] = [];
+
+  if (forfaitActif) {
+    if (selFreelances.length === 0) {
+      const condEnc = [gte(encaissements.date, debut), lte(encaissements.date, fin)];
+      if (selClients.length) condEnc.push(inArray(projets.clientId, selClients));
+      encForfait = await db
+        .select({
+          date: encaissements.date,
+          montant: encaissements.montant,
+          projetId: projets.id,
+          projetNom: projets.nom,
+          clientId: projets.clientId,
+          clientNom: clients.nom,
+        })
+        .from(encaissements)
+        .innerJoin(projets, eq(encaissements.projetId, projets.id))
+        .innerJoin(clients, eq(projets.clientId, clients.id))
+        .where(and(...condEnc));
+    }
+    const condDec = [gte(decaissements.date, debut), lte(decaissements.date, fin)];
+    if (selClients.length) condDec.push(inArray(projets.clientId, selClients));
+    if (selFreelances.length) condDec.push(inArray(decaissements.freelanceId, selFreelances));
+    decForfait = await db
+      .select({
+        date: decaissements.date,
+        montant: decaissements.montant,
+        projetId: projets.id,
+        projetNom: projets.nom,
+        clientId: projets.clientId,
+        clientNom: clients.nom,
+        freelanceId: decaissements.freelanceId,
+        freelancePrenom: freelances.prenom,
+        freelanceNom: freelances.nom,
+      })
+      .from(decaissements)
+      .innerJoin(projets, eq(decaissements.projetId, projets.id))
+      .innerJoin(clients, eq(projets.clientId, clients.id))
+      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
+      .where(and(...condDec));
+  }
+
+  // Indicateurs globaux : régie (jours posés) + forfait (encaissements / décaissements).
+  const caRegie = rows.reduce((s, r) => s + Number(r.tjmVente), 0);
+  const coutRegie = rows.reduce((s, r) => s + Number(r.tjmAchat), 0);
+  const caForfait = encForfait.reduce((s, e) => s + Number(e.montant), 0);
+  const coutForfait = decForfait.reduce((s, d) => s + Number(d.montant), 0);
+  const caTotal = arrondi(caRegie + caForfait);
+  const coutTotal = arrondi(coutRegie + coutForfait);
   const margeTotale = arrondi(caTotal - coutTotal);
   const tauxMarge = caTotal > 0 ? margeTotale / caTotal : 0;
-  const joursTotal = rows.length;
-  const margeJour = joursTotal > 0 ? arrondi(margeTotale / joursTotal) : 0;
+  const joursTotal = rows.length; // les jours sont une notion de régie
+  const margeJour = joursTotal > 0 ? arrondi((caRegie - coutRegie) / joursTotal) : 0;
 
   // Agrégation par dimension choisie.
   type Acc = { cle: string; label: string; ordreLabel: string; ca: number; cout: number; jours: number };
   const map = new Map<string, Acc>();
-  for (const r of rows) {
-    let cle: string;
-    let label: string;
-    let ordreLabel: string;
-    if (grouper === "freelance") {
-      cle = `f${r.freelanceId}`;
-      label = `${r.freelancePrenom} ${r.freelanceNom}`;
-      ordreLabel = label.toLowerCase();
-    } else if (grouper === "client") {
-      cle = `c${r.clientId}`;
-      label = r.clientNom;
-      ordreLabel = label.toLowerCase();
-    } else if (grouper === "mission") {
-      cle = `m${r.missionId}`;
-      label = r.missionNom;
-      ordreLabel = label.toLowerCase();
-    } else {
-      cle = r.date.slice(0, 7); // "AAAA-MM"
-      label = formatMois(Number(cle.slice(0, 4)), Number(cle.slice(5, 7)));
-      ordreLabel = cle;
-    }
+  const ajout = (
+    cle: string,
+    label: string,
+    ordreLabel: string,
+    ca: number,
+    cout: number,
+    jours: number
+  ) => {
     const g = map.get(cle) ?? { cle, label, ordreLabel, ca: 0, cout: 0, jours: 0 };
-    g.ca += Number(r.tjmVente);
-    g.cout += Number(r.tjmAchat);
-    g.jours += 1;
+    g.ca += ca;
+    g.cout += cout;
+    g.jours += jours;
     map.set(cle, g);
+  };
+  const dimMois = (date: string) => {
+    const cle = date.slice(0, 7);
+    return { cle, label: formatMois(Number(cle.slice(0, 4)), Number(cle.slice(5, 7))), ordre: cle };
+  };
+
+  // Régie (jours posés).
+  for (const r of rows) {
+    if (grouper === "freelance") {
+      const label = `${r.freelancePrenom} ${r.freelanceNom}`;
+      ajout(`f${r.freelanceId}`, label, label.toLowerCase(), Number(r.tjmVente), Number(r.tjmAchat), 1);
+    } else if (grouper === "client") {
+      ajout(`c${r.clientId}`, r.clientNom, r.clientNom.toLowerCase(), Number(r.tjmVente), Number(r.tjmAchat), 1);
+    } else if (grouper === "mission") {
+      ajout(`m${r.missionId}`, r.missionNom, r.missionNom.toLowerCase(), Number(r.tjmVente), Number(r.tjmAchat), 1);
+    } else {
+      const d = dimMois(r.date);
+      ajout(d.cle, d.label, d.ordre, Number(r.tjmVente), Number(r.tjmAchat), 1);
+    }
+  }
+
+  // Forfait : encaissements (CA). Non attribuable à un freelance.
+  for (const e of encForfait) {
+    if (grouper === "freelance") continue;
+    if (grouper === "client") ajout(`c${e.clientId}`, e.clientNom, e.clientNom.toLowerCase(), Number(e.montant), 0, 0);
+    else if (grouper === "mission") ajout(`p${e.projetId}`, e.projetNom, e.projetNom.toLowerCase(), Number(e.montant), 0, 0);
+    else {
+      const d = dimMois(e.date);
+      ajout(d.cle, d.label, d.ordre, Number(e.montant), 0, 0);
+    }
+  }
+
+  // Forfait : décaissements (coût), rattachés au freelance.
+  for (const d2 of decForfait) {
+    if (grouper === "freelance") {
+      const label = `${d2.freelancePrenom} ${d2.freelanceNom}`;
+      ajout(`f${d2.freelanceId}`, label, label.toLowerCase(), 0, Number(d2.montant), 0);
+    } else if (grouper === "client") {
+      ajout(`c${d2.clientId}`, d2.clientNom, d2.clientNom.toLowerCase(), 0, Number(d2.montant), 0);
+    } else if (grouper === "mission") {
+      ajout(`p${d2.projetId}`, d2.projetNom, d2.projetNom.toLowerCase(), 0, Number(d2.montant), 0);
+    } else {
+      const d = dimMois(d2.date);
+      ajout(d.cle, d.label, d.ordre, 0, Number(d2.montant), 0);
+    }
   }
 
   const lignes: LigneStat[] = Array.from(map.values()).map((g) => ({
@@ -229,8 +322,8 @@ export default async function PageStatistiques({
         <Indicateur titre="Coût" valeur={formatEuro(coutTotal)} />
         <Indicateur titre="Marge" valeur={formatEuro(margeTotale)} />
         <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
-        <Indicateur titre="Jours facturés" valeur={formatJours(joursTotal)} />
-        <Indicateur titre="Marge / jour" valeur={formatEuro(margeJour)} />
+        <Indicateur titre="Jours facturés (régie)" valeur={formatJours(joursTotal)} />
+        <Indicateur titre="Marge / jour (régie)" valeur={formatEuro(margeJour)} />
       </div>
 
       <Card>
