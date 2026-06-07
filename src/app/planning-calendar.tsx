@@ -145,7 +145,7 @@ export function PlanningCalendar({
                 key={j.date}
                 className={`w-9 border-b border-l px-0 py-1 text-center text-xs font-medium ${
                   j.estAujourdhui
-                    ? "border-primary bg-primary/10 text-primary"
+                    ? "border-primary bg-primary text-primary-foreground"
                     : `border-border ${
                         j.weekend || j.ferie
                           ? "bg-secondary text-muted-foreground"
@@ -157,7 +157,7 @@ export function PlanningCalendar({
                 }
               >
                 <div>{j.lettre}</div>
-                <div className={j.estAujourdhui ? "text-primary" : "text-foreground"}>
+                <div className={j.estAujourdhui ? "font-semibold" : "text-foreground"}>
                   {j.num}
                 </div>
               </th>
@@ -185,10 +185,10 @@ export function PlanningCalendar({
                         setSelection({ ...selection, fin: index });
                       }
                     }}
-                    className={`h-9 w-9 cursor-pointer border-b border-l p-0.5 text-center align-middle ${
-                      j.estAujourdhui ? "border-l-primary bg-primary/5" : "border-l-border"
-                    } border-b-border ${
-                      j.weekend || j.ferie ? "bg-secondary/60" : ""
+                    className={`h-9 w-9 cursor-pointer border-b border-b-border border-l p-0.5 text-center align-middle ${
+                      j.estAujourdhui
+                        ? "border-l-primary bg-primary/10"
+                        : `border-l-border ${j.weekend || j.ferie ? "bg-secondary/60" : ""}`
                     } ${selectionnee ? "ring-2 ring-inset ring-primary" : ""}`}
                   >
                     {cellule ? (
