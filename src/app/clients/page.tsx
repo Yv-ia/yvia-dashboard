@@ -28,7 +28,7 @@ export default async function PageClients() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Clients</h1>
+        <h1 className="font-display text-3xl">Clients</h1>
         <ClientFormDialog
           action={creerClient}
           titre="Nouveau client"

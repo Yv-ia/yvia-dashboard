@@ -25,7 +25,7 @@ export default async function PageFreelances() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Freelances</h1>
+        <h1 className="font-display text-3xl">Freelances</h1>
         <FreelanceFormDialog
           action={creerFreelance}
           titre="Nouveau freelance"

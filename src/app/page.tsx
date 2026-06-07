@@ -117,7 +117,7 @@ export default async function PageDashboard({
     <div className="space-y-6">
       {/* En-tête + sélecteur de mois */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Dashboard</h1>
+        <h1 className="font-display text-3xl">Dashboard</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" render={
             <Link href={`/?annee=${precedent.annee}&mois=${precedent.mois}`}>Mois précédent</Link>
@@ -216,7 +216,7 @@ function Indicateur({ titre, valeur }: { titre: string; valeur: string }) {
         <CardTitle className="text-xs font-normal text-muted-foreground">{titre}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-2xl font-semibold">{valeur}</p>
+        <p className="font-display text-3xl">{valeur}</p>
       </CardContent>
     </Card>
   );

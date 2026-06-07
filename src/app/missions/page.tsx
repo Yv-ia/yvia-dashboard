@@ -101,7 +101,7 @@ export default async function PageMissions({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Missions</h1>
+        <h1 className="font-display text-3xl">Missions</h1>
         {peutCreer ? (
           <MissionFormDialog
             action={creerMission}
