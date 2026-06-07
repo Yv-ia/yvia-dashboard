@@ -12,6 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { formatEuro, formatDate } from "@/lib/format";
 import {
   ajouterEncaissement,
@@ -24,9 +25,6 @@ import {
 type Encaissement = { id: number; date: string; montant: string; libelle: string | null };
 type Decaissement = Encaissement & { freelanceNom: string };
 type OptionFreelance = { id: number; prenom: string; nom: string };
-
-const selectClass =
-  "h-9 w-full rounded-xl border border-transparent bg-secondary px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 export function ProjetDetailDialog({
   projet,
@@ -153,16 +151,17 @@ export function ProjetDetailDialog({
               <input type="hidden" name="projetId" value={projet.id} />
               <div className="space-y-1">
                 <Label htmlFor={`dec-freelance-${projet.id}`}>Freelance *</Label>
-                <select id={`dec-freelance-${projet.id}`} name="freelanceId" required className={selectClass} defaultValue="">
-                  <option value="" disabled>
-                    Choisir un freelance
-                  </option>
-                  {freelancesActifs.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.prenom} {f.nom}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  id={`dec-freelance-${projet.id}`}
+                  name="freelanceId"
+                  required
+                  defaultValue=""
+                  placeholder="Choisir un freelance"
+                  options={freelancesActifs.map((f) => ({
+                    value: f.id,
+                    label: `${f.prenom} ${f.nom}`,
+                  }))}
+                />
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">

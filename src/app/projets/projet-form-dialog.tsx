@@ -13,6 +13,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import type { Resultat } from "./actions";
 
 type OptionClient = { id: number; nom: string };
@@ -23,9 +24,6 @@ type Projet = {
   nom: string;
   budget: string;
 };
-
-const selectClass =
-  "h-9 w-full rounded-xl border border-transparent bg-secondary px-3 py-1 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
 
 export function ProjetFormDialog({
   action,
@@ -73,22 +71,14 @@ export function ProjetFormDialog({
 
           <div className="space-y-2">
             <Label htmlFor="clientId">Client *</Label>
-            <select
+            <Select
               id="clientId"
               name="clientId"
               defaultValue={projet?.clientId ?? ""}
               required
-              className={selectClass}
-            >
-              <option value="" disabled>
-                Choisir un client
-              </option>
-              {clientsListe.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.nom}
-                </option>
-              ))}
-            </select>
+              placeholder="Choisir un client"
+              options={clientsListe.map((c) => ({ value: c.id, label: c.nom }))}
+            />
           </div>
 
           <div className="space-y-2">
