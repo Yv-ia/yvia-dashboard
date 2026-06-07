@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { missions, tarifs } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 
 export type Resultat = { ok: boolean; message?: string };
@@ -31,10 +31,10 @@ export async function creerMission(formData: FormData): Promise<Resultat> {
   if (!champs.ok) return { ok: false, message: champs.erreur };
 
   // Premier tarif (obligatoire à la création).
-  const moisBrut = String(formData.get("moisEffet") ?? "").trim(); // "AAAA-MM"
+  const dateEffet = String(formData.get("dateEffet") ?? "").trim(); // "AAAA-MM-JJ"
   const tjmAchat = String(formData.get("tjmAchat") ?? "").trim();
   const tjmVente = String(formData.get("tjmVente") ?? "").trim();
-  if (!moisBrut) return { ok: false, message: "Le mois d'effet du tarif est obligatoire." };
+  if (!dateEffet) return { ok: false, message: "La date d'effet du tarif est obligatoire." };
   if (tjmAchat === "" || tjmVente === "") {
     return { ok: false, message: "Les TJM achat et vente sont obligatoires." };
   }
@@ -44,7 +44,6 @@ export async function creerMission(formData: FormData): Promise<Resultat> {
       message: "Le TJM de vente doit être supérieur ou égal au TJM d'achat.",
     };
   }
-  const moisEffet = `${moisBrut}-01`; // 1er du mois
 
   // Transaction : mission + premier tarif réussissent (ou échouent) ensemble.
   await db.transaction(async (tx) => {
@@ -52,7 +51,7 @@ export async function creerMission(formData: FormData): Promise<Resultat> {
       .insert(missions)
       .values(champs.valeurs)
       .returning({ id: missions.id });
-    await tx.insert(tarifs).values({ missionId: mission.id, moisEffet, tjmAchat, tjmVente });
+    await tx.insert(tarifs).values({ missionId: mission.id, dateEffet, tjmAchat, tjmVente });
   });
 
   revalidatePath("/missions");
@@ -69,6 +68,39 @@ export async function modifierMission(formData: FormData): Promise<Resultat> {
   await db.update(missions).set(champs.valeurs).where(eq(missions.id, id));
 
   revalidatePath("/missions");
+  return { ok: true };
+}
+
+// Ajoute (ou remplace) un tarif à partir d'une date donnée.
+// Les jours antérieurs gardent l'ancien tarif : le passé n'est jamais modifié.
+export async function ajouterTarif(formData: FormData): Promise<Resultat> {
+  const missionId = Number(formData.get("missionId"));
+  const dateEffet = String(formData.get("dateEffet") ?? "").trim(); // "AAAA-MM-JJ"
+  const tjmAchat = String(formData.get("tjmAchat") ?? "").trim();
+  const tjmVente = String(formData.get("tjmVente") ?? "").trim();
+
+  if (!missionId) return { ok: false, message: "Mission introuvable." };
+  if (!dateEffet) return { ok: false, message: "La date d'effet est obligatoire." };
+  if (tjmAchat === "" || tjmVente === "") {
+    return { ok: false, message: "Les TJM achat et vente sont obligatoires." };
+  }
+  if (Number(tjmVente) < Number(tjmAchat)) {
+    return {
+      ok: false,
+      message: "Le TJM de vente doit être supérieur ou égal au TJM d'achat.",
+    };
+  }
+
+  // Si un tarif existe déjà pour cette date, on le remplace (sinon on l'ajoute).
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(tarifs)
+      .where(and(eq(tarifs.missionId, missionId), eq(tarifs.dateEffet, dateEffet)));
+    await tx.insert(tarifs).values({ missionId, dateEffet, tjmAchat, tjmVente });
+  });
+
+  revalidatePath("/missions");
+  revalidatePath("/");
   return { ok: true };
 }
 

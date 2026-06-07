@@ -13,8 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
-import { calculMarge } from "@/lib/calculs/marge";
+import { tarifDuJour } from "@/lib/calculs/tarif-applicable";
 import { estJourFerie } from "@/lib/calculs/jours-feries";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
@@ -128,10 +127,25 @@ export default async function PagePlanning({
     };
   });
 
-  // Indicateurs : à partir des jours réellement affectés ce mois-ci.
+  // Tarifs par mission (en nombres) pour le calcul jour par jour.
+  const tarifsParMission = new Map<
+    number,
+    { dateEffet: string; tjmAchat: number; tjmVente: number }[]
+  >();
+  for (const t of tousTarifs) {
+    const arr = tarifsParMission.get(t.missionId) ?? [];
+    arr.push({
+      dateEffet: t.dateEffet,
+      tjmAchat: Number(t.tjmAchat),
+      tjmVente: Number(t.tjmVente),
+    });
+    tarifsParMission.set(t.missionId, arr);
+  }
+
+  // Indicateurs : chaque jour affecté utilise le tarif en vigueur CE jour-là.
   const parMission = new Map<
     number,
-    { missionId: number; clientNom: string; freelanceNom: string; jours: number }
+    { missionId: number; clientNom: string; freelanceNom: string; jours: number; ca: number; cout: number }
   >();
   for (const a of affs) {
     const e =
@@ -140,28 +154,29 @@ export default async function PagePlanning({
         clientNom: a.clientNom,
         freelanceNom: `${a.prenom} ${a.nom}`,
         jours: 0,
+        ca: 0,
+        cout: 0,
       };
+    const tarif = tarifDuJour(tarifsParMission.get(a.missionId) ?? [], a.date);
     e.jours += 1;
+    if (tarif) {
+      e.ca += tarif.tjmVente;
+      e.cout += tarif.tjmAchat;
+    }
     parMission.set(a.missionId, e);
   }
 
+  const arrondi = (n: number) => Math.round(n * 100) / 100;
   const detail = Array.from(parMission.values()).map((e) => {
-    const ts = tousTarifs
-      .filter((t) => t.missionId === e.missionId)
-      .map((t) => ({
-        moisEffet: t.moisEffet,
-        tjmAchat: Number(t.tjmAchat),
-        tjmVente: Number(t.tjmVente),
-      }));
-    const tarif = tarifDuMois(ts, annee, mois);
-    const r = tarif
-      ? calculMarge(e.jours, tarif.tjmAchat, tarif.tjmVente)
-      : { ca: 0, cout: 0, marge: 0, tauxMarge: 0 };
+    // TJM affiché : tarif en vigueur en fin de mois (indicatif si plusieurs tarifs dans le mois).
+    const tarifFin = tarifDuJour(tarifsParMission.get(e.missionId) ?? [], finMois);
     return {
       ...e,
-      tjmAchat: tarif?.tjmAchat ?? null,
-      tjmVente: tarif?.tjmVente ?? null,
-      ...r,
+      ca: arrondi(e.ca),
+      cout: arrondi(e.cout),
+      marge: arrondi(e.ca - e.cout),
+      tjmAchat: tarifFin?.tjmAchat ?? null,
+      tjmVente: tarifFin?.tjmVente ?? null,
     };
   });
 

@@ -113,8 +113,8 @@ export function MissionFormDialog({
             <div className="space-y-4 rounded-md border p-4">
               <p className="text-sm font-medium">Premier tarif</p>
               <div className="space-y-2">
-                <Label htmlFor="moisEffet">À partir du mois *</Label>
-                <Input id="moisEffet" name="moisEffet" type="month" required />
+                <Label htmlFor="dateEffet">À partir du *</Label>
+                <Input id="dateEffet" name="dateEffet" type="date" required />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">

@@ -80,7 +80,7 @@ export const tarifs = pgTable("tarifs", {
   missionId: integer("mission_id")
     .notNull()
     .references(() => missions.id, { onDelete: "cascade" }), // si on supprime la mission, ses tarifs partent avec
-  moisEffet: date("mois_effet").notNull(), // toujours le 1er du mois (ex : 2026-07-01 = juillet 2026)
+  dateEffet: date("mois_effet").notNull(), // jour à partir duquel ce tarif s'applique
   tjmAchat: numeric("tjm_achat", { precision: 10, scale: 2 }).notNull(), // € HT
   tjmVente: numeric("tjm_vente", { precision: 10, scale: 2 }).notNull(), // € HT
 });

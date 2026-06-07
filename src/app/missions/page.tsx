@@ -12,9 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
+import { tarifDuJour } from "@/lib/calculs/tarif-applicable";
 import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
+import { MissionTarifsDialog } from "./mission-tarifs-dialog";
 import { ToggleActifMissionButton } from "./toggle-actif-mission-button";
 import { creerMission, modifierMission } from "./actions";
 
@@ -30,9 +31,7 @@ export default async function PageMissions({
 }) {
   const { statut: filtreActif = "actives" } = await searchParams;
 
-  const maintenant = new Date();
-  const annee = maintenant.getUTCFullYear();
-  const moisCourant = maintenant.getUTCMonth() + 1;
+  const aujourdhui = new Date().toISOString().slice(0, 10);
 
   // Missions + noms du freelance et du client.
   const missionsRows = await db
@@ -52,6 +51,17 @@ export default async function PageMissions({
 
   const tousTarifs = await db.select().from(tarifs);
 
+  // Tarifs regroupés par mission (pour l'historique des tarifs).
+  const tarifsParMission = new Map<
+    number,
+    { dateEffet: string; tjmAchat: string; tjmVente: string }[]
+  >();
+  for (const t of tousTarifs) {
+    const arr = tarifsParMission.get(t.missionId) ?? [];
+    arr.push({ dateEffet: t.dateEffet, tjmAchat: t.tjmAchat, tjmVente: t.tjmVente });
+    tarifsParMission.set(t.missionId, arr);
+  }
+
   // Listes pour les menus déroulants du formulaire.
   const freelancesActifs = await db
     .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
@@ -68,11 +78,11 @@ export default async function PageMissions({
     const tarifsMission = tousTarifs
       .filter((t) => t.missionId === m.id)
       .map((t) => ({
-        moisEffet: t.moisEffet,
+        dateEffet: t.dateEffet,
         tjmAchat: Number(t.tjmAchat),
         tjmVente: Number(t.tjmVente),
       }));
-    const tarifCourant = tarifDuMois(tarifsMission, annee, moisCourant);
+    const tarifCourant = tarifDuJour(tarifsMission, aujourdhui);
     return { ...m, tarifCourant };
   });
 
@@ -178,6 +188,11 @@ export default async function PageMissions({
                             Modifier
                           </Button>
                         }
+                      />
+                      <MissionTarifsDialog
+                        missionId={l.id}
+                        libelle={`${l.freelancePrenom} ${l.freelanceNom} / ${l.clientNom}`}
+                        tarifs={tarifsParMission.get(l.id) ?? []}
                       />
                       <ToggleActifMissionButton id={l.id} actif={l.actif} />
                     </TableCell>
