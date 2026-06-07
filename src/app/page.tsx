@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { missions, freelances, clients, tarifs, absences } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { missions, freelances, clients, tarifs, affectations } from "@/db/schema";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,9 +13,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { calculMissionMois } from "@/lib/calculs/calcul-mission-mois";
-import { dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
-import { formatEuro, formatJours, formatPourcent, formatMois } from "@/lib/format";
+import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
+import { calculMarge } from "@/lib/calculs/marge";
+import { estJourFerie } from "@/lib/calculs/jours-feries";
+import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
+import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
+import { PlanningCalendar, type Couleur, type LigneFreelance, type Jour } from "./planning-calendar";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const moisSuivant = (a: number, m: number) =>
@@ -23,9 +26,19 @@ const moisSuivant = (a: number, m: number) =>
 const moisPrecedent = (a: number, m: number) =>
   m === 1 ? { annee: a - 1, mois: 12 } : { annee: a, mois: m - 1 };
 
-type LigneAbsence = { missionId: number; jours: string };
+// Palette pour distinguer les missions dans le planning.
+const PALETTE: Couleur[] = [
+  { bg: "#0571ed", fg: "#ffffff" },
+  { bg: "#0b172b", fg: "#ffffff" },
+  { bg: "#3794ff", fg: "#ffffff" },
+  { bg: "#52698f", fg: "#ffffff" },
+  { bg: "#0f5bb3", fg: "#ffffff" },
+  { bg: "#a5d8e1", fg: "#0b172b" },
+];
 
-export default async function PageDashboard({
+const LETTRES = ["D", "L", "M", "M", "J", "V", "S"];
+
+export default async function PagePlanning({
   searchParams,
 }: {
   searchParams: Promise<{ annee?: string; mois?: string }>;
@@ -38,126 +51,178 @@ export default async function PageDashboard({
 
   const suivant = moisSuivant(annee, mois);
   const precedent = moisPrecedent(annee, mois);
-  const moisISO = `${annee}-${pad2(mois)}-01`;
-  const moisSuivantISO = `${suivant.annee}-${pad2(suivant.mois)}-01`;
+  const debutMois = premierJourDuMois(annee, mois);
+  const finMois = dernierJourDuMois(annee, mois);
 
-  // Données : missions (avec noms), tarifs, et absences des deux mois concernés.
-  const missionsRows = await db
+  // Jours du mois (avec week-ends et jours fériés).
+  const nbJours = Number(finMois.slice(8, 10));
+  const jours: Jour[] = [];
+  for (let d = 1; d <= nbJours; d++) {
+    const date = `${annee}-${pad2(mois)}-${pad2(d)}`;
+    const dow = new Date(date + "T00:00:00Z").getUTCDay();
+    jours.push({
+      date,
+      num: d,
+      lettre: LETTRES[dow],
+      weekend: dow === 0 || dow === 6,
+      ferie: estJourFerie(date),
+    });
+  }
+
+  // Données.
+  const freelancesActifs = await db
+    .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+    .from(freelances)
+    .where(eq(freelances.actif, true))
+    .orderBy(freelances.nom);
+
+  const missionsDispo = await db
     .select({
       id: missions.id,
-      dateDebut: missions.dateDebut,
-      dateFin: missions.dateFin,
-      joursParSemaine: missions.joursParSemaine,
-      freelancePrenom: freelances.prenom,
-      freelanceNom: freelances.nom,
+      freelanceId: missions.freelanceId,
       clientNom: clients.nom,
     })
     .from(missions)
-    .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
     .innerJoin(clients, eq(missions.clientId, clients.id))
-    .orderBy(freelances.nom);
+    .where(eq(missions.disponiblePlanning, true));
+
+  const affs = await db
+    .select({
+      freelanceId: affectations.freelanceId,
+      date: affectations.date,
+      missionId: affectations.missionId,
+      clientNom: clients.nom,
+      prenom: freelances.prenom,
+      nom: freelances.nom,
+    })
+    .from(affectations)
+    .innerJoin(missions, eq(affectations.missionId, missions.id))
+    .innerJoin(clients, eq(missions.clientId, clients.id))
+    .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
+    .where(and(gte(affectations.date, debutMois), lte(affectations.date, finMois)));
 
   const tousTarifs = await db.select().from(tarifs);
-  const absencesMois = await db
-    .select({ missionId: absences.missionId, jours: absences.jours })
-    .from(absences)
-    .where(eq(absences.mois, moisISO));
-  const absencesMoisSuivant = await db
-    .select({ missionId: absences.missionId, jours: absences.jours })
-    .from(absences)
-    .where(eq(absences.mois, moisSuivantISO));
 
-  const tarifsParMission = (missionId: number) =>
-    tousTarifs
-      .filter((t) => t.missionId === missionId)
+  // Couleur stable par mission.
+  const idsMissions = Array.from(
+    new Set([...missionsDispo.map((m) => m.id), ...affs.map((a) => a.missionId)])
+  ).sort((a, b) => a - b);
+  const couleurDe = (missionId: number): Couleur =>
+    PALETTE[idsMissions.indexOf(missionId) % PALETTE.length];
+
+  // Lignes de la grille (une par freelance actif).
+  const lignes: LigneFreelance[] = freelancesActifs.map((f) => {
+    const cellules: LigneFreelance["cellules"] = {};
+    for (const a of affs) {
+      if (a.freelanceId === f.id) {
+        cellules[a.date] = { clientNom: a.clientNom, couleur: couleurDe(a.missionId) };
+      }
+    }
+    return {
+      id: f.id,
+      nom: `${f.prenom} ${f.nom}`,
+      missions: missionsDispo
+        .filter((m) => m.freelanceId === f.id)
+        .map((m) => ({ id: m.id, clientNom: m.clientNom, couleur: couleurDe(m.id) })),
+      cellules,
+    };
+  });
+
+  // Indicateurs : à partir des jours réellement affectés ce mois-ci.
+  const parMission = new Map<
+    number,
+    { missionId: number; clientNom: string; freelanceNom: string; jours: number }
+  >();
+  for (const a of affs) {
+    const e =
+      parMission.get(a.missionId) ?? {
+        missionId: a.missionId,
+        clientNom: a.clientNom,
+        freelanceNom: `${a.prenom} ${a.nom}`,
+        jours: 0,
+      };
+    e.jours += 1;
+    parMission.set(a.missionId, e);
+  }
+
+  const detail = Array.from(parMission.values()).map((e) => {
+    const ts = tousTarifs
+      .filter((t) => t.missionId === e.missionId)
       .map((t) => ({
         moisEffet: t.moisEffet,
         tjmAchat: Number(t.tjmAchat),
         tjmVente: Number(t.tjmVente),
       }));
+    const tarif = tarifDuMois(ts, annee, mois);
+    const r = tarif
+      ? calculMarge(e.jours, tarif.tjmAchat, tarif.tjmVente)
+      : { ca: 0, cout: 0, marge: 0, tauxMarge: 0 };
+    return {
+      ...e,
+      tjmAchat: tarif?.tjmAchat ?? null,
+      tjmVente: tarif?.tjmVente ?? null,
+      ...r,
+    };
+  });
 
-  // Calcule les lignes et totaux d'un mois donné.
-  function calculerMois(a: number, m: number, listeAbsences: LigneAbsence[]) {
-    const debutMois = `${a}-${pad2(m)}-01`;
-    const finMois = dernierJourDuMois(a, m);
-    const absParMission = new Map<number, number>();
-    for (const abs of listeAbsences) {
-      absParMission.set(abs.missionId, (absParMission.get(abs.missionId) ?? 0) + Number(abs.jours));
-    }
-
-    const lignes = missionsRows
-      // Missions qui chevauchent le mois.
-      .filter((mi) => mi.dateDebut <= finMois && (mi.dateFin === null || mi.dateFin >= debutMois))
-      .map((mi) => {
-        const res = calculMissionMois(
-          {
-            dateDebut: mi.dateDebut,
-            dateFin: mi.dateFin,
-            joursParSemaine: Number(mi.joursParSemaine),
-            tarifs: tarifsParMission(mi.id),
-            joursAbsence: absParMission.get(mi.id) ?? 0,
-          },
-          a,
-          m
-        );
-        return { mission: mi, ...res };
-      });
-
-    const totalCa = lignes.reduce((s, l) => s + l.ca, 0);
-    const totalCout = lignes.reduce((s, l) => s + l.cout, 0);
-    const totalMarge = lignes.reduce((s, l) => s + l.marge, 0);
-    const tauxMarge = totalCa > 0 ? totalMarge / totalCa : 0;
-    return { lignes, totalCa, totalCout, totalMarge, tauxMarge };
-  }
-
-  const moisCourant = calculerMois(annee, mois, absencesMois);
-  const moisProchain = calculerMois(suivant.annee, suivant.mois, absencesMoisSuivant);
+  const totalCa = detail.reduce((s, l) => s + l.ca, 0);
+  const totalCout = detail.reduce((s, l) => s + l.cout, 0);
+  const totalMarge = detail.reduce((s, l) => s + l.marge, 0);
+  const tauxMarge = totalCa > 0 ? totalMarge / totalCa : 0;
 
   return (
     <div className="space-y-6">
-      {/* En-tête + sélecteur de mois */}
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Dashboard</h1>
+        <h1 className="font-display text-3xl">Planning</h1>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" render={
-            <Link href={`/?annee=${precedent.annee}&mois=${precedent.mois}`}>Mois précédent</Link>
-          } />
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={`/?annee=${precedent.annee}&mois=${precedent.mois}`}>Mois précédent</Link>}
+          />
           <span className="min-w-40 text-center text-sm font-medium capitalize">
             {formatMois(annee, mois)}
           </span>
-          <Button variant="outline" size="sm" render={
-            <Link href={`/?annee=${suivant.annee}&mois=${suivant.mois}`}>Mois suivant</Link>
-          } />
+          <Button
+            variant="outline"
+            size="sm"
+            render={<Link href={`/?annee=${suivant.annee}&mois=${suivant.mois}`}>Mois suivant</Link>}
+          />
         </div>
       </div>
 
-      {/* Indicateurs + carte mois suivant */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        <Indicateur titre="CA prévisionnel" valeur={formatEuro(moisCourant.totalCa)} />
-        <Indicateur titre="Coût total" valeur={formatEuro(moisCourant.totalCout)} />
-        <Indicateur titre="Marge totale" valeur={formatEuro(moisCourant.totalMarge)} />
-        <Indicateur titre="Taux de marge" valeur={formatPourcent(moisCourant.tauxMarge)} />
-        <Link
-          href={`/?annee=${suivant.annee}&mois=${suivant.mois}`}
-          className="block rounded-xl border bg-primary/5 p-4 transition-colors hover:bg-primary/10"
-        >
-          <p className="text-xs text-muted-foreground capitalize">
-            Mois suivant ({formatMois(suivant.annee, suivant.mois)})
+      {freelancesActifs.length === 0 ? (
+        <Card>
+          <CardContent className="py-6 text-sm text-muted-foreground">
+            Ajoutez des freelances et des missions pour commencer à planifier.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          <p className="text-sm text-muted-foreground">
+            Cliquez-glissez sur une ligne pour sélectionner des jours, puis choisissez la mission.
           </p>
-          <p className="mt-1 text-sm">CA : {formatEuro(moisProchain.totalCa)}</p>
-          <p className="text-sm">Marge : {formatEuro(moisProchain.totalMarge)}</p>
-        </Link>
+          <PlanningCalendar jours={jours} lignes={lignes} />
+        </>
+      )}
+
+      {/* Indicateurs */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Indicateur titre="CA prévisionnel" valeur={formatEuro(totalCa)} />
+        <Indicateur titre="Coût total" valeur={formatEuro(totalCout)} />
+        <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
+        <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
       </div>
 
       {/* Détail par mission */}
       <Card>
         <CardHeader>
-          <CardTitle>Détail par freelance</CardTitle>
+          <CardTitle>Détail du mois</CardTitle>
         </CardHeader>
         <CardContent>
-          {moisCourant.lignes.length === 0 ? (
+          {detail.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Aucune mission active sur ce mois.
+              Aucun jour affecté ce mois-ci. Le détail apparaîtra une fois le planning rempli.
             </p>
           ) : (
             <Table>
@@ -167,25 +232,21 @@ export default async function PageDashboard({
                   <TableHead>Client</TableHead>
                   <TableHead className="text-right">TJM achat</TableHead>
                   <TableHead className="text-right">TJM vente</TableHead>
-                  <TableHead className="text-right">Marge/jour</TableHead>
-                  <TableHead className="text-right">Jours fact.</TableHead>
+                  <TableHead className="text-right">Jours</TableHead>
                   <TableHead className="text-right">Marge du mois</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {moisCourant.lignes.map((l) => (
-                  <TableRow key={l.mission.id}>
-                    <TableCell className="font-medium">
-                      {l.mission.freelancePrenom} {l.mission.freelanceNom}
-                    </TableCell>
-                    <TableCell>{l.mission.clientNom}</TableCell>
+                {detail.map((l) => (
+                  <TableRow key={l.missionId}>
+                    <TableCell className="font-medium">{l.freelanceNom}</TableCell>
+                    <TableCell>{l.clientNom}</TableCell>
                     <TableCell className="text-right">
                       {l.tjmAchat !== null ? formatEuro(l.tjmAchat) : "-"}
                     </TableCell>
                     <TableCell className="text-right">
                       {l.tjmVente !== null ? formatEuro(l.tjmVente) : "-"}
                     </TableCell>
-                    <TableCell className="text-right">{formatEuro(l.margeParJour)}</TableCell>
                     <TableCell className="text-right">{formatJours(l.jours)}</TableCell>
                     <TableCell className="text-right">{formatEuro(l.marge)}</TableCell>
                   </TableRow>
@@ -193,12 +254,10 @@ export default async function PageDashboard({
               </TableBody>
               <TableFooter>
                 <TableRow>
-                  <TableCell colSpan={6} className="font-medium">
+                  <TableCell colSpan={5} className="font-medium">
                     Total
                   </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatEuro(moisCourant.totalMarge)}
-                  </TableCell>
+                  <TableCell className="text-right font-medium">{formatEuro(totalMarge)}</TableCell>
                 </TableRow>
               </TableFooter>
             </Table>

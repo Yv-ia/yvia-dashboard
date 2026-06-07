@@ -12,7 +12,6 @@ type ValeursMission = {
   clientId: number;
   dateDebut: string;
   dateFin: string | null;
-  joursParSemaine: string;
 };
 
 // Résultat de la lecture : soit une erreur, soit des valeurs valides.
@@ -25,7 +24,6 @@ function lireChampsMission(formData: FormData): Lecture {
   const dateDebut = String(formData.get("dateDebut") ?? "").trim();
   const dateFinBrut = String(formData.get("dateFin") ?? "").trim();
   const dateFin = dateFinBrut === "" ? null : dateFinBrut;
-  const joursParSemaine = String(formData.get("joursParSemaine") ?? "").trim();
 
   if (!freelanceId || !clientId) {
     return { ok: false, erreur: "Le freelance et le client sont obligatoires." };
@@ -34,11 +32,7 @@ function lireChampsMission(formData: FormData): Lecture {
   if (dateFin && dateFin < dateDebut) {
     return { ok: false, erreur: "La date de fin doit être après la date de début." };
   }
-  const jps = Number(joursParSemaine);
-  if (!(jps >= 0.5 && jps <= 7)) {
-    return { ok: false, erreur: "Les jours par semaine doivent être compris entre 0,5 et 7." };
-  }
-  return { ok: true, valeurs: { freelanceId, clientId, dateDebut, dateFin, joursParSemaine } };
+  return { ok: true, valeurs: { freelanceId, clientId, dateDebut, dateFin } };
 }
 
 export async function creerMission(formData: FormData): Promise<Resultat> {
@@ -89,5 +83,21 @@ export async function supprimerMission(formData: FormData): Promise<Resultat> {
   await db.delete(missions).where(eq(missions.id, id));
 
   revalidatePath("/missions");
+  return { ok: true };
+}
+
+// Active / désactive la disponibilité d'une mission dans le planning.
+export async function basculerDisponible(formData: FormData): Promise<Resultat> {
+  const id = Number(formData.get("id"));
+  const disponible = String(formData.get("disponible")) === "true";
+  if (!id) return { ok: false, message: "Mission introuvable." };
+
+  await db
+    .update(missions)
+    .set({ disponiblePlanning: !disponible })
+    .where(eq(missions.id, id));
+
+  revalidatePath("/missions");
+  revalidatePath("/");
   return { ok: true };
 }

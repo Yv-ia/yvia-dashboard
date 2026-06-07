@@ -24,7 +24,6 @@ type Mission = {
   clientId: number;
   dateDebut: string;
   dateFin: string | null;
-  joursParSemaine: string;
 };
 
 // Style commun aux menus déroulants natifs (proche du champ Input de shadcn).
@@ -132,20 +131,6 @@ export function MissionFormDialog({
                 defaultValue={mission?.dateFin ?? ""}
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="joursParSemaine">Jours par semaine *</Label>
-            <Input
-              id="joursParSemaine"
-              name="joursParSemaine"
-              type="number"
-              step="0.5"
-              min="0.5"
-              max="7"
-              defaultValue={mission?.joursParSemaine ?? "5"}
-              required
-            />
           </div>
 
           {avecTarif ? (

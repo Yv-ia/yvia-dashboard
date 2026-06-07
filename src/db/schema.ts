@@ -9,6 +9,7 @@ import {
   boolean,
   date,
   numeric,
+  unique,
 } from "drizzle-orm/pg-core";
 
 // --- FREELANCES ---
@@ -42,11 +43,31 @@ export const missions = pgTable("missions", {
     .references(() => clients.id),
   dateDebut: date("date_debut").notNull(),
   dateFin: date("date_fin"), // optionnel : vide = mission en cours sans terme défini
-  // Décimales autorisées (0,5 à 7). numeric = nombre exact, idéal pour ce genre de valeur.
+  // Décimales autorisées (0,5 à 7). Conservé pour compatibilité, plus utilisé dans le calcul.
   joursParSemaine: numeric("jours_par_semaine", { precision: 3, scale: 1 })
     .notNull()
     .default("5"),
+  // Interrupteur manuel : la mission est-elle proposée dans le pop-up du planning ?
+  disponiblePlanning: boolean("disponible_planning").notNull().default(true),
 });
+
+// --- AFFECTATIONS (planning jour par jour) ---
+// Un jour donné, un freelance est rattaché à une mission. La contrainte d'unicité
+// garantit qu'un freelance ne peut être affecté qu'à une seule mission par jour.
+export const affectations = pgTable(
+  "affectations",
+  {
+    id: serial("id").primaryKey(),
+    missionId: integer("mission_id")
+      .notNull()
+      .references(() => missions.id, { onDelete: "cascade" }),
+    freelanceId: integer("freelance_id")
+      .notNull()
+      .references(() => freelances.id, { onDelete: "cascade" }),
+    date: date("date").notNull(),
+  },
+  (t) => [unique("un_freelance_par_jour").on(t.freelanceId, t.date)]
+);
 
 // --- TARIFS (périodes de tarification d'une mission) ---
 // Une mission a au moins un tarif. Un nouveau tarif s'applique à partir d'un mois donné,

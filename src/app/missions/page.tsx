@@ -14,9 +14,10 @@ import {
 } from "@/components/ui/table";
 import { tarifDuMois } from "@/lib/calculs/tarif-du-mois";
 import { statutMission, type StatutMission } from "@/lib/calculs/statut-mission";
-import { formatEuro, formatDate, formatJours } from "@/lib/format";
+import { formatEuro, formatDate } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
 import { DeleteMissionButton } from "./delete-mission-button";
+import { ToggleDisponibleButton } from "./toggle-disponible-button";
 import { creerMission, modifierMission } from "./actions";
 
 // Filtres par statut (slugs sans accent pour l'URL).
@@ -54,7 +55,7 @@ export default async function PageMissions({
       clientId: missions.clientId,
       dateDebut: missions.dateDebut,
       dateFin: missions.dateFin,
-      joursParSemaine: missions.joursParSemaine,
+      disponiblePlanning: missions.disponiblePlanning,
       freelancePrenom: freelances.prenom,
       freelanceNom: freelances.nom,
       clientNom: clients.nom,
@@ -154,8 +155,8 @@ export default async function PageMissions({
                   <TableHead className="text-right">TJM vente</TableHead>
                   <TableHead className="text-right">Marge/jour</TableHead>
                   <TableHead>Période</TableHead>
-                  <TableHead>j/sem.</TableHead>
                   <TableHead>Statut</TableHead>
+                  <TableHead>Planning</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -180,8 +181,10 @@ export default async function PageMissions({
                     <TableCell>
                       {formatDate(l.dateDebut)} → {formatDate(l.dateFin)}
                     </TableCell>
-                    <TableCell>{formatJours(Number(l.joursParSemaine))}</TableCell>
                     <TableCell>{l.statut}</TableCell>
+                    <TableCell>
+                      <ToggleDisponibleButton id={l.id} disponible={l.disponiblePlanning} />
+                    </TableCell>
                     <TableCell className="text-right">
                       <MissionFormDialog
                         action={modifierMission}
@@ -195,7 +198,6 @@ export default async function PageMissions({
                           clientId: l.clientId,
                           dateDebut: l.dateDebut,
                           dateFin: l.dateFin,
-                          joursParSemaine: l.joursParSemaine,
                         }}
                         trigger={
                           <Button variant="ghost" size="sm">
