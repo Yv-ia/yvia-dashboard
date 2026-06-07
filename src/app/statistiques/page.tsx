@@ -8,7 +8,6 @@ import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/forma
 import { StatsFiltres } from "./stats-filtres";
 import { PERIODES, GROUPES } from "./stats-config";
 import { StatsTable, type LigneStat } from "./stats-table";
-import { StatsGraphe } from "./stats-graphe";
 import { StatsExport } from "./stats-export";
 import { MultiSelectFiltre } from "./multi-select-filtre";
 
@@ -247,10 +246,7 @@ export default async function PageStatistiques({
               Aucune donnée sur cette période. Ajustez les filtres ou remplissez le planning.
             </p>
           ) : (
-            <>
-              <StatsGraphe lignes={lignes} />
-              <StatsTable lignes={lignes} labelColonne={labelColonne} />
-            </>
+            <StatsTable lignes={lignes} labelColonne={labelColonne} />
           )}
         </CardContent>
       </Card>
