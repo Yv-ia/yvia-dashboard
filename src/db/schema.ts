@@ -68,3 +68,41 @@ export const affectations = pgTable(
   },
   (t) => [unique("un_freelance_par_jour").on(t.freelanceId, t.date)]
 );
+
+// --- PROJETS (forfait) ---
+// Une enveloppe budgétaire vendue à un client. La trésorerie est suivie via des
+// événements datés : encaissements (côté client) et décaissements (côté freelances).
+export const projets = pgTable("projets", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clients.id),
+  nom: text("nom").notNull(),
+  budget: numeric("budget", { precision: 12, scale: 2 }).notNull(), // € HT, enveloppe vendue
+  actif: boolean("actif").notNull().default(true), // true = actif, false = archivé
+});
+
+// --- ENCAISSEMENTS (argent reçu du client, rattaché à un projet) ---
+export const encaissements = pgTable("encaissements", {
+  id: serial("id").primaryKey(),
+  projetId: integer("projet_id")
+    .notNull()
+    .references(() => projets.id, { onDelete: "cascade" }),
+  date: date("date").notNull(),
+  montant: numeric("montant", { precision: 12, scale: 2 }).notNull(), // € HT
+  libelle: text("libelle"), // optionnel (ex : acompte, jalon 1...)
+});
+
+// --- DECAISSEMENTS (argent versé à un freelance, rattaché à un projet) ---
+export const decaissements = pgTable("decaissements", {
+  id: serial("id").primaryKey(),
+  projetId: integer("projet_id")
+    .notNull()
+    .references(() => projets.id, { onDelete: "cascade" }),
+  freelanceId: integer("freelance_id")
+    .notNull()
+    .references(() => freelances.id),
+  date: date("date").notNull(),
+  montant: numeric("montant", { precision: 12, scale: 2 }).notNull(), // € HT
+  libelle: text("libelle"), // optionnel
+});
