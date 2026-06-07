@@ -141,26 +141,28 @@ export default async function PageMissions({
                     </TableCell>
                     <TableCell>{l.actif ? "Actif" : "Inactif"}</TableCell>
                     <TableCell className="text-right">
-                      <MissionFormDialog
-                        action={modifierMission}
-                        titre="Modifier la mission"
-                        freelancesActifs={freelancesActifs}
-                        clientsListe={clientsListe}
-                        mission={{
-                          id: l.id,
-                          nom: l.nom,
-                          freelanceId: l.freelanceId,
-                          clientId: l.clientId,
-                          tjmAchat: l.tjmAchat,
-                          tjmVente: l.tjmVente,
-                        }}
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            Modifier
-                          </Button>
-                        }
-                      />
-                      <ToggleActifMissionButton id={l.id} actif={l.actif} />
+                      <div className="flex justify-end gap-2">
+                        <MissionFormDialog
+                          action={modifierMission}
+                          titre="Modifier la mission"
+                          freelancesActifs={freelancesActifs}
+                          clientsListe={clientsListe}
+                          mission={{
+                            id: l.id,
+                            nom: l.nom,
+                            freelanceId: l.freelanceId,
+                            clientId: l.clientId,
+                            tjmAchat: l.tjmAchat,
+                            tjmVente: l.tjmVente,
+                          }}
+                          trigger={
+                            <Button variant="outline" size="sm">
+                              Modifier
+                            </Button>
+                          }
+                        />
+                        <ToggleActifMissionButton id={l.id} actif={l.actif} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}

@@ -18,7 +18,7 @@ export function ArchiveClientButton({ id, actif }: { id: number; actif: boolean 
   // Réactiver : action sans risque, un seul clic.
   if (!actif) {
     return (
-      <Button variant="ghost" size="sm" onClick={basculer}>
+      <Button variant="outline" size="sm" onClick={basculer}>
         Réactiver
       </Button>
     );
@@ -28,7 +28,7 @@ export function ArchiveClientButton({ id, actif }: { id: number; actif: boolean 
   return (
     <ConfirmDialog
       trigger={
-        <Button variant="ghost" size="sm">
+        <Button variant="outline" size="sm">
           Archiver
         </Button>
       }

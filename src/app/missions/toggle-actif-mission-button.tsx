@@ -24,7 +24,7 @@ export function ToggleActifMissionButton({
   // Réactiver : action sans risque, un seul clic.
   if (!actif) {
     return (
-      <Button variant="ghost" size="sm" onClick={basculer}>
+      <Button variant="outline" size="sm" onClick={basculer}>
         Réactiver
       </Button>
     );
@@ -34,7 +34,7 @@ export function ToggleActifMissionButton({
   return (
     <ConfirmDialog
       trigger={
-        <Button variant="ghost" size="sm">
+        <Button variant="outline" size="sm">
           Désactiver
         </Button>
       }

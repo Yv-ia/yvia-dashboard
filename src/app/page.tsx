@@ -221,7 +221,7 @@ export default async function PagePlanning({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl">Planning</h1>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="outline"
             size="icon-sm"
@@ -235,7 +235,7 @@ export default async function PagePlanning({
               </Link>
             }
           />
-          <span className="min-w-40 text-center text-sm font-medium capitalize">
+          <span className="min-w-28 text-center text-sm font-medium capitalize">
             {formatMois(annee, mois)}
           </span>
           <Button
@@ -276,11 +276,7 @@ export default async function PagePlanning({
         </Card>
       ) : (
         <>
-          <div className="flex items-start justify-between gap-4">
-            <p className="text-sm text-muted-foreground">
-              Cliquez-glissez sur une ligne pour sélectionner des jours, puis choisissez la
-              mission. Cliquez sur un jour déjà posé pour modifier son tarif.
-            </p>
+          <div className="flex justify-end">
             <EtendreMoisButton
               annee={annee}
               mois={mois}

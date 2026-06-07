@@ -92,6 +92,24 @@ export default async function PageFreelances({
     statsParFreelance.set(a.freelanceId, s);
   }
 
+  // Marge cumulée depuis le 1er juin 2026, par freelance.
+  const affsDepuis = await db
+    .select({
+      freelanceId: affectations.freelanceId,
+      tjmAchat: affectations.tjmAchat,
+      tjmVente: affectations.tjmVente,
+    })
+    .from(affectations)
+    .where(gte(affectations.date, "2026-06-01"));
+  const margeDepuisParFreelance = new Map<number, number>();
+  for (const a of affsDepuis) {
+    margeDepuisParFreelance.set(
+      a.freelanceId,
+      (margeDepuisParFreelance.get(a.freelanceId) ?? 0) +
+        (Number(a.tjmVente) - Number(a.tjmAchat))
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -152,21 +170,26 @@ export default async function PageFreelances({
                       <FreelanceDetailDialog
                         nom={`${freelance.prenom} ${freelance.nom}`}
                         missions={missionsParFreelance.get(freelance.id) ?? []}
-                        stats={statsParFreelance.get(freelance.id) ?? { jours: 0, marge: 0 }}
+                        stats={{
+                          ...(statsParFreelance.get(freelance.id) ?? { jours: 0, marge: 0 }),
+                          margeDepuis: margeDepuisParFreelance.get(freelance.id) ?? 0,
+                        }}
                       />
                     </TableCell>
                     <TableCell className="text-right">
-                      <FreelanceFormDialog
-                        action={modifierFreelance}
-                        freelance={freelance}
-                        titre="Modifier le freelance"
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            Modifier
-                          </Button>
-                        }
-                      />
-                      <ToggleActifButton id={freelance.id} actif={freelance.actif} />
+                      <div className="flex justify-end gap-2">
+                        <FreelanceFormDialog
+                          action={modifierFreelance}
+                          freelance={freelance}
+                          titre="Modifier le freelance"
+                          trigger={
+                            <Button variant="outline" size="sm">
+                              Modifier
+                            </Button>
+                          }
+                        />
+                        <ToggleActifButton id={freelance.id} actif={freelance.actif} />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
