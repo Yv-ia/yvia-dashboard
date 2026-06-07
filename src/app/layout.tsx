@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import "@fontsource-variable/inter";
 import "@fontsource/cal-sans/400.css";
 import "./globals.css";
@@ -20,7 +22,16 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col">
         <header className="border-b bg-background">
           <nav className="mx-auto flex max-w-6xl items-center gap-1 px-4 py-3">
-            <span className="mr-6 font-display text-xl text-yvia-navy">Yvia</span>
+            <Link href="/" className="mr-6 flex items-center">
+              <Image
+                src="/logo-yvia.svg"
+                alt="Yvia"
+                width={107}
+                height={40}
+                className="h-7 w-auto"
+                priority
+              />
+            </Link>
             <NavLinks />
           </nav>
         </header>
