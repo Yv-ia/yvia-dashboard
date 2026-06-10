@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import { clients, missions, freelances, affectations } from "@/db/schema";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ export default async function PageClients({
 }: {
   searchParams: Promise<{ vue?: string }>;
 }) {
+  await exigerSession();
   const { vue } = await searchParams;
   const archives = vue === "archives";
 

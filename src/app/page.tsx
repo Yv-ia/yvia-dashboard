@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import {
   missions,
   freelances,
@@ -56,6 +57,7 @@ export default async function PagePlanning({
 }: {
   searchParams: Promise<{ annee?: string; mois?: string }>;
 }) {
+  await exigerSession();
   const params = await searchParams;
   const maintenant = new Date();
   const annee = Number(params.annee) || maintenant.getUTCFullYear();
