@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { missions, affectations } from "@/db/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth/server";
 
 export type Resultat = { ok: boolean; message?: string };
 
@@ -42,6 +43,10 @@ function lireChampsMission(formData: FormData): Lecture {
 }
 
 export async function creerMission(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) {
+    return { ok: false, message: "Vous n'êtes pas connecté." };
+  }
+
   const champs = lireChampsMission(formData);
   if (!champs.ok) return { ok: false, message: champs.erreur };
 
@@ -52,6 +57,10 @@ export async function creerMission(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierMission(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) {
+    return { ok: false, message: "Vous n'êtes pas connecté." };
+  }
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Mission introuvable." };
 
@@ -80,6 +89,10 @@ export async function modifierMission(formData: FormData): Promise<Resultat> {
 // Active / désactive une mission (on ne supprime pas, pour garder l'historique).
 // Une mission inactive n'est plus proposée dans le planning.
 export async function basculerActifMission(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) {
+    return { ok: false, message: "Vous n'êtes pas connecté." };
+  }
+
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";
   if (!id) return { ok: false, message: "Mission introuvable." };
