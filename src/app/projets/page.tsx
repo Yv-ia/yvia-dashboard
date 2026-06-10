@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,7 @@ export default async function PageProjets({
 }: {
   searchParams: Promise<{ vue?: string }>;
 }) {
+  await exigerSession();
   const { vue } = await searchParams;
   const archives = vue === "archives";
 

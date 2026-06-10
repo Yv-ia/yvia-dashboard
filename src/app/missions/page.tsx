@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import { missions, freelances, clients } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
@@ -27,6 +28,7 @@ export default async function PageMissions({
 }: {
   searchParams: Promise<{ statut?: string }>;
 }) {
+  await exigerSession();
   const { statut: filtreActif = "actives" } = await searchParams;
 
   // Missions + noms du freelance et du client.

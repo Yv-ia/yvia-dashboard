@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import {
   affectations,
   missions,
@@ -72,6 +73,7 @@ export default async function PageStatistiques({
     missions?: string;
   }>;
 }) {
+  await exigerSession();
   const params = await searchParams;
   const maintenant = new Date();
   const annee = maintenant.getUTCFullYear();

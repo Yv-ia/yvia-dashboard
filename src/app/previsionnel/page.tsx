@@ -1,4 +1,5 @@
 import { db } from "@/db";
+import { exigerSession } from "@/lib/auth/server";
 import { projets, clients, encaissements, decaissements } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,7 @@ import { SousOnglets, ONGLETS_FINANCES } from "@/app/sous-onglets";
 const arrondi = (n: number) => Math.round(n * 100) / 100;
 
 export default async function PagePrevisionnel() {
+  await exigerSession();
   // Projets actifs + fiabilité du projet et du client (pour la cascade).
   const projetsActifs = await db
     .select({
