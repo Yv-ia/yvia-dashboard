@@ -1,8 +1,8 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath } from "node:url";
 
-// Permet aux tests de résoudre les imports "@/..." comme le fait Next.js
-// (cf. la clé "paths" de tsconfig.json : "@/*" -> "./src/*").
+// Résout l'alias "@/..." (= ./src) dans les tests, comme tsconfig le fait pour l'app.
+// Les tests existants n'utilisent que des imports relatifs : cet alias ne les affecte pas.
 export default defineConfig({
   resolve: {
     alias: {

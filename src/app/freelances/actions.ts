@@ -1,4 +1,5 @@
 "use server";
+// Le middleware ne protège PAS les Server Actions : chaque mutation vérifie la session.
 
 import { db } from "@/db";
 import { freelances } from "@/db/schema";
@@ -9,9 +10,8 @@ import { getSession } from "@/lib/auth/server";
 export type Resultat = { ok: boolean; message?: string };
 
 export async function creerFreelance(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const prenom = String(formData.get("prenom") ?? "").trim();
   const nom = String(formData.get("nom") ?? "").trim();
@@ -28,9 +28,8 @@ export async function creerFreelance(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierFreelance(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const prenom = String(formData.get("prenom") ?? "").trim();
@@ -49,9 +48,8 @@ export async function modifierFreelance(formData: FormData): Promise<Resultat> {
 
 // Active ou désactive un freelance (pas de suppression : voir la spec).
 export async function basculerActif(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";

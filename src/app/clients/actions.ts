@@ -1,6 +1,7 @@
 "use server";
 // "use server" : ces fonctions s'exécutent UNIQUEMENT sur le serveur.
 // L'écran les appelle, mais le code (et l'accès à la base) reste côté serveur.
+// Le middleware ne protège PAS les Server Actions : chaque mutation vérifie la session.
 
 import { db } from "@/db";
 import { clients } from "@/db/schema";
@@ -11,9 +12,8 @@ import { getSession } from "@/lib/auth/server";
 export type Resultat = { ok: boolean; message?: string };
 
 export async function creerClient(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const nom = String(formData.get("nom") ?? "").trim();
   if (!nom) return { ok: false, message: "Le nom de la société est obligatoire." };
@@ -26,9 +26,8 @@ export async function creerClient(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierClient(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const nom = String(formData.get("nom") ?? "").trim();
@@ -43,9 +42,8 @@ export async function modifierClient(formData: FormData): Promise<Resultat> {
 
 // Archive / désarchive un client (on ne supprime pas, pour garder l'historique).
 export async function basculerActifClient(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";

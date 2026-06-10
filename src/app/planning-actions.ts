@@ -1,4 +1,5 @@
 "use server";
+// Le middleware ne protège PAS les Server Actions : chaque mutation vérifie la session.
 
 import { db } from "@/db";
 import { affectations, missions } from "@/db/schema";
@@ -20,9 +21,8 @@ export async function affecterJours(
   freelanceId: number,
   dates: string[]
 ): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   if (!missionId || !freelanceId || dates.length === 0) {
     return { ok: false, message: "Données manquantes." };
@@ -72,9 +72,8 @@ export async function etendreAuMoisSuivant(
   annee: number,
   mois: number
 ): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const suivant = mois === 12 ? { a: annee + 1, m: 1 } : { a: annee, m: mois + 1 };
 
@@ -151,9 +150,8 @@ export async function modifierTjmAffectation(
   tjmAchat: string,
   tjmVente: string
 ): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   if (!freelanceId || !date) return { ok: false, message: "Données manquantes." };
   if (tjmAchat.trim() === "" || tjmVente.trim() === "") {
@@ -180,9 +178,8 @@ export async function libererJours(
   freelanceId: number,
   dates: string[]
 ): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   if (!freelanceId || dates.length === 0) {
     return { ok: false, message: "Données manquantes." };

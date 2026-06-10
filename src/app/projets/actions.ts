@@ -1,4 +1,5 @@
 "use server";
+// Le middleware ne protège PAS les Server Actions : chaque mutation vérifie la session.
 
 import { db } from "@/db";
 import { projets, clients, encaissements, decaissements, jalons } from "@/db/schema";
@@ -32,9 +33,8 @@ async function totalEncaisse(projetId: number): Promise<number> {
 }
 
 export async function creerProjet(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const clientId = Number(formData.get("clientId"));
   const nom = String(formData.get("nom") ?? "").trim();
@@ -52,9 +52,8 @@ export async function creerProjet(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierProjet(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const clientId = Number(formData.get("clientId"));
@@ -83,9 +82,8 @@ export async function modifierProjet(formData: FormData): Promise<Resultat> {
 }
 
 export async function basculerActifProjet(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";
@@ -97,9 +95,8 @@ export async function basculerActifProjet(formData: FormData): Promise<Resultat>
 }
 
 export async function ajouterEncaissement(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const projetId = Number(formData.get("projetId"));
   const date = String(formData.get("date") ?? "").trim();
@@ -137,9 +134,8 @@ export async function ajouterEncaissement(formData: FormData): Promise<Resultat>
 }
 
 export async function supprimerEncaissement(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Encaissement introuvable." };
@@ -149,9 +145,8 @@ export async function supprimerEncaissement(formData: FormData): Promise<Resulta
 }
 
 export async function ajouterDecaissement(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const projetId = Number(formData.get("projetId"));
   const freelanceId = Number(formData.get("freelanceId"));
@@ -175,9 +170,8 @@ export async function ajouterDecaissement(formData: FormData): Promise<Resultat>
 }
 
 export async function supprimerDecaissement(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Décaissement introuvable." };
@@ -188,9 +182,8 @@ export async function supprimerDecaissement(formData: FormData): Promise<Resulta
 
 // Bascule une échéance de recette prévue en réalisée (encaissée).
 export async function marquerEncaissementRealise(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Échéance introuvable." };
@@ -201,9 +194,8 @@ export async function marquerEncaissementRealise(formData: FormData): Promise<Re
 
 // Bascule une échéance de coût prévue en réalisée (décaissée).
 export async function marquerDecaissementRealise(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Échéance introuvable." };
@@ -214,9 +206,8 @@ export async function marquerDecaissementRealise(formData: FormData): Promise<Re
 
 // Fiabilité de paiement par défaut d'un client (vide = aucune).
 export async function definirFiabiliteClient(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const clientId = Number(formData.get("clientId"));
   if (!clientId) return { ok: false, message: "Client introuvable." };
@@ -230,9 +221,8 @@ export async function definirFiabiliteClient(formData: FormData): Promise<Result
 
 // Fiabilité par défaut d'un projet (vide = hérite du client).
 export async function definirFiabiliteProjet(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const projetId = Number(formData.get("projetId"));
   if (!projetId) return { ok: false, message: "Projet introuvable." };
@@ -246,9 +236,8 @@ export async function definirFiabiliteProjet(formData: FormData): Promise<Result
 
 // --- JALONS : repères datés, sans montant. N'impactent pas la marge. ---
 export async function ajouterJalon(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const projetId = Number(formData.get("projetId"));
   const date = String(formData.get("date") ?? "").trim();
@@ -264,9 +253,8 @@ export async function ajouterJalon(formData: FormData): Promise<Resultat> {
 }
 
 export async function supprimerJalon(formData: FormData): Promise<Resultat> {
-  if (!(await getSession())) {
-    return { ok: false, message: "Vous n'êtes pas connecté." };
-  }
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
 
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Jalon introuvable." };
