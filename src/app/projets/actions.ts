@@ -1,4 +1,5 @@
 "use server";
+// Le middleware ne protège PAS les Server Actions : chaque mutation vérifie la session.
 
 import { db } from "@/db";
 import { projets, clients, encaissements, decaissements, jalons } from "@/db/schema";
@@ -6,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { formatEuro } from "@/lib/format";
 import { estFiabilite } from "@/lib/calculs/previsionnel";
+import { getSession } from "@/lib/auth/server";
 
 // Lit une catégorie de fiabilité depuis le formulaire : une vraie catégorie, ou null
 // (valeur vide / sentinelle "herite" = on laisse la cascade décider).
@@ -31,6 +33,9 @@ async function totalEncaisse(projetId: number): Promise<number> {
 }
 
 export async function creerProjet(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const clientId = Number(formData.get("clientId"));
   const nom = String(formData.get("nom") ?? "").trim();
   const budget = String(formData.get("budget") ?? "").trim();
@@ -47,6 +52,9 @@ export async function creerProjet(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierProjet(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const clientId = Number(formData.get("clientId"));
   const nom = String(formData.get("nom") ?? "").trim();
@@ -74,6 +82,9 @@ export async function modifierProjet(formData: FormData): Promise<Resultat> {
 }
 
 export async function basculerActifProjet(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";
   if (!id) return { ok: false, message: "Projet introuvable." };
@@ -84,6 +95,9 @@ export async function basculerActifProjet(formData: FormData): Promise<Resultat>
 }
 
 export async function ajouterEncaissement(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const projetId = Number(formData.get("projetId"));
   const date = String(formData.get("date") ?? "").trim();
   const montant = String(formData.get("montant") ?? "").trim();
@@ -120,6 +134,9 @@ export async function ajouterEncaissement(formData: FormData): Promise<Resultat>
 }
 
 export async function supprimerEncaissement(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Encaissement introuvable." };
   await db.delete(encaissements).where(eq(encaissements.id, id));
@@ -128,6 +145,9 @@ export async function supprimerEncaissement(formData: FormData): Promise<Resulta
 }
 
 export async function ajouterDecaissement(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const projetId = Number(formData.get("projetId"));
   const freelanceId = Number(formData.get("freelanceId"));
   const date = String(formData.get("date") ?? "").trim();
@@ -150,6 +170,9 @@ export async function ajouterDecaissement(formData: FormData): Promise<Resultat>
 }
 
 export async function supprimerDecaissement(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Décaissement introuvable." };
   await db.delete(decaissements).where(eq(decaissements.id, id));
@@ -159,6 +182,9 @@ export async function supprimerDecaissement(formData: FormData): Promise<Resulta
 
 // Bascule une échéance de recette prévue en réalisée (encaissée).
 export async function marquerEncaissementRealise(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Échéance introuvable." };
   await db.update(encaissements).set({ statut: "encaisse" }).where(eq(encaissements.id, id));
@@ -168,6 +194,9 @@ export async function marquerEncaissementRealise(formData: FormData): Promise<Re
 
 // Bascule une échéance de coût prévue en réalisée (décaissée).
 export async function marquerDecaissementRealise(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Échéance introuvable." };
   await db.update(decaissements).set({ statut: "decaisse" }).where(eq(decaissements.id, id));
@@ -177,6 +206,9 @@ export async function marquerDecaissementRealise(formData: FormData): Promise<Re
 
 // Fiabilité de paiement par défaut d'un client (vide = aucune).
 export async function definirFiabiliteClient(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const clientId = Number(formData.get("clientId"));
   if (!clientId) return { ok: false, message: "Client introuvable." };
   await db
@@ -189,6 +221,9 @@ export async function definirFiabiliteClient(formData: FormData): Promise<Result
 
 // Fiabilité par défaut d'un projet (vide = hérite du client).
 export async function definirFiabiliteProjet(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const projetId = Number(formData.get("projetId"));
   if (!projetId) return { ok: false, message: "Projet introuvable." };
   await db
@@ -201,6 +236,9 @@ export async function definirFiabiliteProjet(formData: FormData): Promise<Result
 
 // --- JALONS : repères datés, sans montant. N'impactent pas la marge. ---
 export async function ajouterJalon(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const projetId = Number(formData.get("projetId"));
   const date = String(formData.get("date") ?? "").trim();
   const libelle = String(formData.get("libelle") ?? "").trim();
@@ -215,6 +253,9 @@ export async function ajouterJalon(formData: FormData): Promise<Resultat> {
 }
 
 export async function supprimerJalon(formData: FormData): Promise<Resultat> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   if (!id) return { ok: false, message: "Jalon introuvable." };
   await db.delete(jalons).where(eq(jalons.id, id));
