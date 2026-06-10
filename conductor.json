@@ -2,7 +2,7 @@
   "scripts": {
     "setup": "./scripts/worktree-up.sh",
     "run": "npm run dev -- -p \"$CONDUCTOR_PORT\"",
-    "archive": "./scripts/worktree-down.sh"
+    "archive": "./scripts/worktree-down.sh --purge"
   },
   "runScriptMode": "concurrent"
 }
