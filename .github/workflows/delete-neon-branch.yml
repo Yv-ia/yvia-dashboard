@@ -2,6 +2,12 @@ name: Delete Neon branch
 
 on:
   delete:
+  workflow_dispatch:
+    inputs:
+      branch_name:
+        description: Git branch name to clean up in Neon
+        required: true
+        type: string
   pull_request:
     types:
       - closed
@@ -14,12 +20,14 @@ jobs:
     name: Delete matching Neon branch
     runs-on: ubuntu-latest
     if: >
+      github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'delete' && github.event.ref_type == 'branch') ||
       (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == github.repository)
 
     env:
       DELETED_REF: ${{ github.event.ref }}
+      DISPATCH_REF: ${{ inputs.branch_name }}
       NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
       NEON_PROJECT_ID: ${{ vars.NEON_PROJECT_ID }}
       NEONCTL_VERSION: 2.24.2
@@ -31,7 +39,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          branch_name="${DELETED_REF:-$PR_HEAD_REF}"
+          branch_name="${DISPATCH_REF:-${DELETED_REF:-$PR_HEAD_REF}}"
 
           if [ -z "$branch_name" ]; then
             echo "No branch name found for this event."
@@ -44,6 +52,15 @@ jobs:
               exit 0
               ;;
           esac
+
+          candidate_names=("$branch_name")
+          if [[ "$branch_name" != preview/* ]]; then
+            candidate_names+=("preview/$branch_name")
+          fi
+
+          candidate_names_json="$(
+            printf '%s\n' "${candidate_names[@]}" | jq -R . | jq -s .
+          )"
 
           if [ -z "${NEON_API_KEY:-}" ]; then
             echo "NEON_API_KEY secret is not configured."
@@ -62,24 +79,27 @@ jobs:
             --no-analytics \
             --color false)"
 
-          branch_id="$(jq -r --arg name "$branch_name" '
+          matches="$(jq -r --argjson names "$candidate_names_json" '
             .[]
-            | select(.name == $name)
+            | select(.name as $name | $names | index($name))
             | select(.default != true)
             | select(.protected != true)
-            | .id
-          ' <<< "$branches_json" | head -n 1)"
+            | [.id, .name]
+            | @tsv
+          ' <<< "$branches_json")"
 
-          if [ -z "$branch_id" ]; then
-            echo "No matching non-default Neon branch found for: $branch_name"
+          if [ -z "$matches" ]; then
+            echo "No matching non-default Neon branch found for: ${candidate_names[*]}"
             exit 0
           fi
 
-          npx --yes "neonctl@${NEONCTL_VERSION}" branches delete "$branch_id" \
-            --project-id "$NEON_PROJECT_ID" \
-            --api-key "$NEON_API_KEY" \
-            --output json \
-            --no-analytics \
-            --color false
+          while IFS=$'\t' read -r branch_id neon_branch_name; do
+            npx --yes "neonctl@${NEONCTL_VERSION}" branches delete "$branch_id" \
+              --project-id "$NEON_PROJECT_ID" \
+              --api-key "$NEON_API_KEY" \
+              --output json \
+              --no-analytics \
+              --color false
 
-          echo "Deleted Neon branch $branch_id for Git branch: $branch_name"
+            echo "Deleted Neon branch $branch_id ($neon_branch_name) for Git branch: $branch_name"
+          done <<< "$matches"
