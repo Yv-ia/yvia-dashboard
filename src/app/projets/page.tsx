@@ -132,16 +132,12 @@ export default async function PageProjets({
       {/* Onglets Actifs / Archives */}
       <ListViewToolbar
         action={
-          clientsListe.length > 0 ? (
-            <ProjetFormDialog
-              action={creerProjet}
-              titre="Nouveau projet"
-              clientsListe={clientsListe}
-              trigger={<Button>Nouveau projet</Button>}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground">Ajoutez d’abord un client.</p>
-          )
+          <ProjetFormDialog
+            action={creerProjet}
+            titre="Nouveau projet"
+            clientsListe={clientsListe}
+            trigger={<Button>Nouveau projet</Button>}
+          />
         }
       >
         <Link

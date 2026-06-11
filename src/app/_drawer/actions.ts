@@ -18,6 +18,7 @@ import {
 import { getSession } from "@/lib/auth/server";
 import { estAdmin } from "@/lib/auth/session";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
+import { calculMissionRealisee } from "@/lib/calculs/marge";
 import { formatEuro, formatJours } from "@/lib/format";
 import type { DetailEntite, EntiteRef } from "./types";
 
@@ -219,7 +220,13 @@ async function chargerMission(id: number): Promise<DetailEntite | null> {
     .where(eq(missions.id, id));
   if (!m) return null;
 
+  const affectationsMission = await db
+    .select({ tjmAchat: affectations.tjmAchat, tjmVente: affectations.tjmVente })
+    .from(affectations)
+    .where(eq(affectations.missionId, id));
+
   const margeJour = Number(m.tjmVente) - Number(m.tjmAchat);
+  const realise = calculMissionRealisee(affectationsMission);
 
   return {
     ref: { type: "mission", id },
@@ -233,6 +240,9 @@ async function chargerMission(id: number): Promise<DetailEntite | null> {
       { cle: "tjmVente", label: "TJM vente (€)", valeur: entier(m.tjmVente), type: "number" },
     ],
     infos: [
+      { label: "Jours facturés", valeur: formatJours(realise.joursFactures) },
+      { label: "CA généré", valeur: formatEuro(realise.ca) },
+      { label: "Marge depuis le début", valeur: formatEuro(realise.marge) },
       { label: "Marge / jour", valeur: formatEuro(margeJour) },
       { label: "Statut", valeur: m.actif ? "Active" : "Inactive" },
     ],
