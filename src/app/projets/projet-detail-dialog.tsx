@@ -1,24 +1,23 @@
 "use client";
 
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Sheet,
+  SheetContent,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { formatEuro, formatDate, formatPourcent } from "@/lib/format";
-import {
-  FIABILITES,
-  labelFiabilite,
-  probaDe,
-  resoudreFiabilite,
-} from "@/lib/calculs/previsionnel";
+import { ArchiveProjetButton } from "./archive-projet-button";
+import { ChampInline } from "@/app/_drawer/champ-inline";
+import { modifierChampEntite } from "@/app/_drawer/actions";
+import { formatEuro, formatDate } from "@/lib/format";
+import { pourcentFiabilite } from "@/lib/calculs/previsionnel";
 import {
   ajouterEncaissement,
   supprimerEncaissement,
@@ -28,8 +27,6 @@ import {
   marquerDecaissementRealise,
   ajouterJalon,
   supprimerJalon,
-  definirFiabiliteClient,
-  definirFiabiliteProjet,
   type Resultat,
 } from "./actions";
 
@@ -45,12 +42,6 @@ type Decaissement = Encaissement & { freelanceNom: string };
 type Jalon = { id: number; date: string; libelle: string };
 type OptionFreelance = { id: number; prenom: string; nom: string };
 
-// Options de fiabilité pour les <Select>. "herite" = valeur sentinelle convertie
-// en null côté serveur (on laisse la cascade projet/client décider).
-const optionsFiabilite = (labelHerite: string) => [
-  { value: "herite", label: labelHerite },
-  ...FIABILITES.map((f) => ({ value: f.key, label: `${f.label} (${formatPourcent(f.proba)})` })),
-];
 
 export function ProjetDetailDialog({
   projet,
@@ -58,6 +49,8 @@ export function ProjetDetailDialog({
   decaissements,
   jalons,
   freelancesActifs,
+  open,
+  onOpenChange,
 }: {
   projet: {
     id: number;
@@ -67,13 +60,27 @@ export function ProjetDetailDialog({
     budget: string;
     fiabiliteDefaut: string | null;
     clientFiabilite: string | null;
+    actif: boolean;
   };
   encaissements: Encaissement[];
   decaissements: Decaissement[];
   jalons: Jalon[];
   freelancesActifs: OptionFreelance[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }) {
+  const router = useRouter();
   const aujourdhui = new Date().toISOString().slice(0, 10);
+
+  async function sauverChamp(cle: string, valeur: string) {
+    const res = await modifierChampEntite({ type: "projet", id: projet.id }, cle, valeur);
+    if (res.ok) {
+      toast.success("Projet modifié.");
+      router.refresh();
+    } else {
+      toast.error(res.message ?? "Modification impossible.");
+    }
+  }
 
   const estPrevu = (x: { statut: string }) => x.statut === "prevu";
   const somme = (arr: { montant: string }[]) => arr.reduce((s, x) => s + Number(x.montant), 0);
@@ -83,10 +90,6 @@ export function ProjetDetailDialog({
   const totalDecReel = somme(decaissements.filter((d) => !estPrevu(d)));
   const margeReelle = totalEncReel - totalDecReel;
   const resteAPlanifier = Number(projet.budget) - (totalEncReel + totalEncPrevu);
-
-  // Fiabilité résolue d'une échéance de recette (cascade échéance -> projet -> client).
-  const fiabiliteDe = (e: Encaissement) =>
-    resoudreFiabilite(e.fiabilite, projet.fiabiliteDefaut, projet.clientFiabilite);
 
   async function gerer(res: Resultat, succes: string) {
     if (res.ok) toast.success(succes);
@@ -104,20 +107,29 @@ export function ProjetDetailDialog({
   }
 
   return (
-    <Dialog>
-      <DialogTrigger
-        render={
-          <Button variant="outline" size="sm">
-            Gérer
-          </Button>
-        }
-      />
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="max-w-2xl">
+        <SheetHeader>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Projet</p>
+          <SheetTitle>
             {projet.nom} <span className="text-muted-foreground">· {projet.clientNom}</span>
-          </DialogTitle>
-        </DialogHeader>
+          </SheetTitle>
+        </SheetHeader>
+
+        {/* Nom et budget : éditables au clic (le client n'est pas modifiable ici) */}
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-border p-3">
+          <ChampInline
+            label="Nom du projet"
+            valeur={projet.nom}
+            onSave={(v) => sauverChamp("nom", v)}
+          />
+          <ChampInline
+            label="Budget (€)"
+            valeur={String(Math.round(Number(projet.budget)))}
+            type="number"
+            onSave={(v) => sauverChamp("budget", v)}
+          />
+        </div>
 
         {/* Récap (réalisé, sauf "reste à planifier" qui tient compte du prévu) */}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -126,46 +138,6 @@ export function ProjetDetailDialog({
           <Recap titre="Décaissé" valeur={formatEuro(totalDecReel)} />
           <Recap titre="Marge réalisée" valeur={formatEuro(margeReelle)} accent={margeReelle < 0} />
           <Recap titre="Reste à planifier" valeur={formatEuro(resteAPlanifier)} />
-        </div>
-
-        {/* Fiabilité de paiement par défaut (alimente le prévisionnel) */}
-        <div className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2">
-          <form
-            action={async (fd) => gerer(await definirFiabiliteClient(fd), "Fiabilité du client enregistrée.")}
-            className="space-y-1"
-          >
-            <Label htmlFor={`fcli-${projet.id}`}>Fiabilité du client ({projet.clientNom})</Label>
-            <input type="hidden" name="clientId" value={projet.clientId} />
-            <div className="flex gap-2">
-              <Select
-                id={`fcli-${projet.id}`}
-                name="fiabilite"
-                defaultValue={projet.clientFiabilite ?? "herite"}
-                options={optionsFiabilite("(aucune)")}
-              />
-              <Button type="submit" size="sm" variant="outline">
-                OK
-              </Button>
-            </div>
-          </form>
-          <form
-            action={async (fd) => gerer(await definirFiabiliteProjet(fd), "Fiabilité du projet enregistrée.")}
-            className="space-y-1"
-          >
-            <Label htmlFor={`fproj-${projet.id}`}>Fiabilité de ce projet</Label>
-            <input type="hidden" name="projetId" value={projet.id} />
-            <div className="flex gap-2">
-              <Select
-                id={`fproj-${projet.id}`}
-                name="fiabilite"
-                defaultValue={projet.fiabiliteDefaut ?? "herite"}
-                options={optionsFiabilite("(hérite du client)")}
-              />
-              <Button type="submit" size="sm" variant="outline">
-                OK
-              </Button>
-            </div>
-          </form>
         </div>
 
         <div className="space-y-6">
@@ -190,11 +162,7 @@ export function ProjetDetailDialog({
                     libelle={e.libelle ?? ""}
                     montant={e.montant}
                     prevu={estPrevu(e)}
-                    info={
-                      estPrevu(e)
-                        ? `${labelFiabilite(fiabiliteDe(e))} (${formatPourcent(probaDe(fiabiliteDe(e)))})`
-                        : null
-                    }
+                    info={estPrevu(e) ? `Fiabilité ${pourcentFiabilite(e.fiabilite)} %` : null}
                     onMarquerPaye={
                       estPrevu(e)
                         ? () => action(e.id, marquerEncaissementRealise, "Recette encaissée.")
@@ -235,12 +203,16 @@ export function ProjetDetailDialog({
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor={`enc-fiab-${projet.id}`}>Fiabilité (si prévu)</Label>
-                  <Select
+                  <Label htmlFor={`enc-fiab-${projet.id}`}>Fiabilité % (si prévu)</Label>
+                  <Input
                     id={`enc-fiab-${projet.id}`}
                     name="fiabilite"
-                    defaultValue="herite"
-                    options={optionsFiabilite("(hérite)")}
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    defaultValue="100"
+                    placeholder="0 à 100"
                   />
                 </div>
               </div>
@@ -365,8 +337,12 @@ export function ProjetDetailDialog({
             </Button>
           </form>
         </div>
-      </DialogContent>
-    </Dialog>
+
+        <SheetFooter>
+          <ArchiveProjetButton id={projet.id} actif={projet.actif} />
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 }
 

@@ -1,287 +1,296 @@
+import { Suspense } from "react";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { projets, clients, encaissements, decaissements } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import {
+  affectations,
+  missions,
+  clients,
+  freelances,
+  projets,
+  encaissements,
+  decaissements,
+} from "@/db/schema";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
   TableCell,
-  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatEuro, formatPourcent, formatMois } from "@/lib/format";
-import {
-  calculPrevisionnelProjet,
-  resoudreFiabilite,
-  probaDe,
-  labelFiabilite,
-  type Recette,
-  type Cout,
-} from "@/lib/calculs/previsionnel";
-import { SousOnglets, ONGLETS_FINANCES } from "@/app/sous-onglets";
+import { formatEuro, formatMois } from "@/lib/format";
+import { premierJourDuMois } from "@/lib/calculs/jours-ouvres";
+import { fractionFiabilite } from "@/lib/calculs/previsionnel";
+import { PERIODES } from "@/app/statistiques/stats-config";
+import { StatsFiltres } from "@/app/statistiques/stats-filtres";
+import { StatsFiltreDrawer } from "@/app/statistiques/stats-filtre-drawer";
+import { getSession } from "@/lib/auth/server";
 
 const arrondi = (n: number) => Math.round(n * 100) / 100;
+const pad2 = (n: number) => String(n).padStart(2, "0");
+const isoJour = (d: Date) => d.toISOString().slice(0, 10);
 
-export default async function PagePrevisionnel() {
-  // Projets actifs + fiabilité du projet et du client (pour la cascade).
-  const projetsActifs = await db
-    .select({
-      id: projets.id,
-      nom: projets.nom,
-      budget: projets.budget,
-      fiabiliteDefaut: projets.fiabiliteDefaut,
-      clientNom: clients.nom,
-      clientFiabilite: clients.fiabiliteDefaut,
-    })
-    .from(projets)
-    .innerJoin(clients, eq(projets.clientId, clients.id))
-    .where(eq(projets.actif, true))
-    .orderBy(projets.nom);
+// Fenêtre prévisionnelle (vers l'avenir) : du début du mois courant jusqu'à
+// aujourd'hui + N jours, ou plage personnalisée.
+function fenetre(periode: string, debutPerso: string, finPerso: string, annee: number, mois: number) {
+  if (periode === "perso") return { debut: debutPerso, fin: finPerso };
+  const n = Number(periode) || 365;
+  const fin = new Date();
+  fin.setUTCDate(fin.getUTCDate() + n);
+  return { debut: premierJourDuMois(annee, mois), fin: isoJour(fin) };
+}
 
-  const encRows = await db
-    .select({
-      projetId: encaissements.projetId,
-      date: encaissements.date,
-      montant: encaissements.montant,
-      statut: encaissements.statut,
-      fiabilite: encaissements.fiabilite,
-    })
-    .from(encaissements);
+export default async function PagePrevisionnel({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    periode?: string;
+    debut?: string;
+    fin?: string;
+    freelances?: string;
+    clients?: string;
+    missions?: string;
+  }>;
+}) {
+  if (!(await getSession())) redirect("/login");
 
-  const decRows = await db
-    .select({
-      projetId: decaissements.projetId,
-      date: decaissements.date,
-      montant: decaissements.montant,
-      statut: decaissements.statut,
-    })
-    .from(decaissements);
+  const params = await searchParams;
+  const maintenant = new Date();
+  const annee = maintenant.getUTCFullYear();
+  const mois = maintenant.getUTCMonth() + 1;
+  const aujourd = isoJour(maintenant);
 
-  // Regroupement par projet.
-  const recettesParProjet = new Map<number, (Recette & { date: string })[]>();
-  for (const e of encRows) {
-    const arr = recettesParProjet.get(e.projetId) ?? [];
-    arr.push({ montant: Number(e.montant), statut: e.statut, fiabilite: e.fiabilite, date: e.date });
-    recettesParProjet.set(e.projetId, arr);
+  const periode = PERIODES.some((p) => p.key === params.periode) ? params.periode! : "365";
+  const debutPerso = params.debut || aujourd;
+  const finPerso = params.fin || aujourd;
+  const { debut, fin } = fenetre(periode, debutPerso, finPerso, annee, mois);
+
+  // Filtres (ids séparés par des virgules).
+  const ids = (v?: string) =>
+    (v ?? "").split(",").map(Number).filter((n) => Number.isFinite(n) && n > 0);
+  const selFreelances = ids(params.freelances);
+  const selClients = ids(params.clients);
+  const selMissions = ids(params.missions);
+
+  // --- Régie (missions) : marge planifiée des jours posés ---
+  const condRegie = [gte(affectations.date, debut), lte(affectations.date, fin)];
+  if (selFreelances.length) condRegie.push(inArray(affectations.freelanceId, selFreelances));
+  if (selClients.length) condRegie.push(inArray(missions.clientId, selClients));
+  if (selMissions.length) condRegie.push(inArray(affectations.missionId, selMissions));
+  const affs = await db
+    .select({ date: affectations.date, tjmAchat: affectations.tjmAchat, tjmVente: affectations.tjmVente })
+    .from(affectations)
+    .innerJoin(missions, eq(affectations.missionId, missions.id))
+    .where(and(...condRegie));
+
+  // --- Forfait : un projet n'est pas une mission, on l'exclut si filtre missions ---
+  const forfaitActif = selMissions.length === 0;
+  let encs: { date: string; montant: string; statut: string; fiabilite: string | null }[] = [];
+  let decs: { date: string; montant: string }[] = [];
+  if (forfaitActif) {
+    const condEnc = [gte(encaissements.date, debut), lte(encaissements.date, fin)];
+    if (selClients.length) condEnc.push(inArray(projets.clientId, selClients));
+    // Les encaissements n'ont pas de freelance : exclus si un filtre freelance est posé.
+    if (selFreelances.length === 0) {
+      encs = await db
+        .select({
+          date: encaissements.date,
+          montant: encaissements.montant,
+          statut: encaissements.statut,
+          fiabilite: encaissements.fiabilite,
+        })
+        .from(encaissements)
+        .innerJoin(projets, eq(encaissements.projetId, projets.id))
+        .where(and(...condEnc));
+    }
+    const condDec = [gte(decaissements.date, debut), lte(decaissements.date, fin)];
+    if (selClients.length) condDec.push(inArray(projets.clientId, selClients));
+    if (selFreelances.length) condDec.push(inArray(decaissements.freelanceId, selFreelances));
+    decs = await db
+      .select({ date: decaissements.date, montant: decaissements.montant })
+      .from(decaissements)
+      .innerJoin(projets, eq(decaissements.projetId, projets.id))
+      .where(and(...condDec));
   }
-  const coutsParProjet = new Map<number, (Cout & { date: string })[]>();
-  for (const d of decRows) {
-    const arr = coutsParProjet.get(d.projetId) ?? [];
-    arr.push({ montant: Number(d.montant), statut: d.statut, date: d.date });
-    coutsParProjet.set(d.projetId, arr);
-  }
 
-  // Calcul par projet (les 3 scénarios) + fiabilité par défaut appliquée.
-  const lignes = projetsActifs.map((p) => {
-    const recettes = recettesParProjet.get(p.id) ?? [];
-    const couts = coutsParProjet.get(p.id) ?? [];
-    const prev = calculPrevisionnelProjet(recettes, couts, p.fiabiliteDefaut, p.clientFiabilite);
-    const fiabiliteParDefaut = resoudreFiabilite(null, p.fiabiliteDefaut, p.clientFiabilite);
-    return {
-      id: p.id,
-      nom: p.nom,
-      clientNom: p.clientNom,
-      budget: Number(p.budget),
-      restePrevu: arrondi(prev.caOptimiste - prev.encaisse),
-      fiabiliteLabel: labelFiabilite(fiabiliteParDefaut),
-      ...prev,
-    };
-  });
-
-  // Totaux portefeuille.
-  const tot = lignes.reduce(
-    (s, l) => ({
-      caOptimiste: s.caOptimiste + l.caOptimiste,
-      caPondere: s.caPondere + l.caPondere,
-      caSecurise: s.caSecurise + l.caSecurise,
-      coutTotal: s.coutTotal + l.coutTotal,
-      margePondere: s.margePondere + l.margePondere,
-    }),
-    { caOptimiste: 0, caPondere: 0, caSecurise: 0, coutTotal: 0, margePondere: 0 }
-  );
-  const partSecurisee = tot.caOptimiste > 0 ? tot.caSecurise / tot.caOptimiste : 0;
-
-  // --- Frise de trésorerie mensuelle (tout le portefeuille) ---
-  const fiabiliteProjet = new Map(
-    projetsActifs.map((p) => [p.id, { p: p.fiabiliteDefaut, c: p.clientFiabilite }])
-  );
-  const mois = new Map<string, { entrees: number; sorties: number }>();
-  const ajout = (cle: string, entrees: number, sorties: number) => {
-    const m = mois.get(cle) ?? { entrees: 0, sorties: 0 };
-    m.entrees += entrees;
-    m.sorties += sorties;
-    mois.set(cle, m);
+  // Agrégation par mois.
+  type M = { caMax: number; caProb: number; charges: number };
+  const parMois = new Map<string, M>();
+  const get = (cle: string) => {
+    const m = parMois.get(cle) ?? { caMax: 0, caProb: 0, charges: 0 };
+    parMois.set(cle, m);
+    return m;
   };
-  for (const e of encRows) {
-    const cle = e.date.slice(0, 7);
+  for (const a of affs) {
+    const m = get(a.date.slice(0, 7));
+    m.caMax += Number(a.tjmVente);
+    m.caProb += Number(a.tjmVente); // la régie planifiée est certaine
+    m.charges += Number(a.tjmAchat);
+  }
+  for (const e of encs) {
+    const m = get(e.date.slice(0, 7));
     if (e.statut === "prevu") {
-      const f = fiabiliteProjet.get(e.projetId);
-      const proba = probaDe(resoudreFiabilite(e.fiabilite, f?.p ?? null, f?.c ?? null));
-      ajout(cle, Number(e.montant) * proba, 0); // recette prévue pondérée
+      const proba = fractionFiabilite(e.fiabilite);
+      m.caMax += Number(e.montant);
+      m.caProb += Number(e.montant) * proba;
     } else {
-      ajout(cle, Number(e.montant), 0); // recette encaissée (certaine)
+      m.caMax += Number(e.montant);
+      m.caProb += Number(e.montant);
     }
   }
-  for (const d of decRows) ajout(d.date.slice(0, 7), 0, Number(d.montant)); // coûts à 100 %
+  for (const d of decs) {
+    const m = get(d.date.slice(0, 7));
+    m.charges += Number(d.montant); // les coûts comptent à 100 %
+  }
 
-  // Liste continue de mois, du plus ancien au plus récent, avec trésorerie cumulée.
-  const cles = [...mois.keys()].sort();
-  const friseLignes: { cle: string; entrees: number; sorties: number; flux: number; cumul: number }[] = [];
-  if (cles.length > 0) {
-    const [aDeb, mDeb] = cles[0].split("-").map(Number);
-    const [aFin, mFin] = cles[cles.length - 1].split("-").map(Number);
-    let cumul = 0;
-    let a = aDeb;
-    let m = mDeb;
-    while (a < aFin || (a === aFin && m <= mFin)) {
-      const cle = `${a}-${String(m).padStart(2, "0")}`;
-      const data = mois.get(cle) ?? { entrees: 0, sorties: 0 };
-      const flux = data.entrees - data.sorties;
-      cumul += flux;
-      friseLignes.push({
+  // Bornage : du mois courant jusqu'au dernier mois ayant des données.
+  const moisAvecData = [...parMois.keys()].sort();
+  const debutCle = `${annee}-${pad2(mois)}`;
+  const dernier = moisAvecData[moisAvecData.length - 1];
+
+  const lignes: {
+    cle: string;
+    a: number;
+    m: number;
+    caMax: number;
+    caProb: number;
+    charges: number;
+    margeMax: number;
+    margeProb: number;
+    cumulMax: number;
+    cumulProb: number;
+  }[] = [];
+
+  if (dernier && dernier >= debutCle) {
+    let cumulMax = 0;
+    let cumulProb = 0;
+    let [a, m] = debutCle.split("-").map(Number);
+    while (`${a}-${pad2(m)}` <= dernier) {
+      const cle = `${a}-${pad2(m)}`;
+      const data = parMois.get(cle) ?? { caMax: 0, caProb: 0, charges: 0 };
+      const margeMax = data.caMax - data.charges;
+      const margeProb = data.caProb - data.charges;
+      cumulMax += margeMax;
+      cumulProb += margeProb;
+      lignes.push({
         cle,
-        entrees: arrondi(data.entrees),
-        sorties: arrondi(data.sorties),
-        flux: arrondi(flux),
-        cumul: arrondi(cumul),
+        a,
+        m,
+        caMax: arrondi(data.caMax),
+        caProb: arrondi(data.caProb),
+        charges: arrondi(data.charges),
+        margeMax: arrondi(margeMax),
+        margeProb: arrondi(margeProb),
+        cumulMax: arrondi(cumulMax),
+        cumulProb: arrondi(cumulProb),
       });
       if (m === 12) {
         a += 1;
         m = 1;
-      } else {
-        m += 1;
-      }
+      } else m += 1;
     }
   }
 
+  const totalMargeMax = lignes.length ? lignes[lignes.length - 1].cumulMax : 0;
+  const totalMargeProb = lignes.length ? lignes[lignes.length - 1].cumulProb : 0;
+
+  // Options des filtres (mêmes que les statistiques).
+  const [optFreelances, optClients, optMissions] = await Promise.all([
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .orderBy(freelances.nom),
+    db.select({ id: clients.id, nom: clients.nom }).from(clients).orderBy(clients.nom),
+    db
+      .select({ id: missions.id, nom: missions.nom, clientNom: clients.nom })
+      .from(missions)
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .orderBy(missions.nom),
+  ]);
+
   return (
     <div className="space-y-6">
-      <SousOnglets onglets={ONGLETS_FINANCES} />
-      <h1 className="font-display text-3xl">Prévisionnel</h1>
+      <Suspense>
+        <StatsFiltres
+          periode={periode}
+          grouper="mois"
+          debut={debutPerso}
+          fin={finPerso}
+          showGrouper={false}
+        >
+          <StatsFiltreDrawer
+            clients={optClients.map((c) => ({ value: String(c.id), label: c.nom }))}
+            freelances={optFreelances.map((f) => ({
+              value: String(f.id),
+              label: `${f.prenom} ${f.nom}`,
+            }))}
+            missions={optMissions.map((m) => ({
+              value: String(m.id),
+              label: `${m.nom} (${m.clientNom})`,
+            }))}
+            selClients={selClients.map(String)}
+            selFreelances={selFreelances.map(String)}
+            selMissions={selMissions.map(String)}
+          />
+        </StatsFiltres>
+      </Suspense>
 
-      <p className="text-sm text-muted-foreground">
-        Estimation pondérée par la probabilité de paiement des clients (forfait). Les recettes
-        prévues sont pondérées par leur fiabilité ; les coûts comptent à 100 %. Le chiffre « pondéré »
-        est un indicateur de pilotage à l’échelle du portefeuille, pas une vérité projet par projet.
-      </p>
-
-      {/* Indicateurs portefeuille */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <Indicateur titre="CA optimiste" valeur={formatEuro(arrondi(tot.caOptimiste))} />
-        <Indicateur titre="CA pondéré" valeur={formatEuro(arrondi(tot.caPondere))} />
-        <Indicateur titre="CA sécurisé" valeur={formatEuro(arrondi(tot.caSecurise))} />
-        <Indicateur titre="Coût prévu" valeur={formatEuro(arrondi(tot.coutTotal))} />
-        <Indicateur titre="Marge pondérée" valeur={formatEuro(arrondi(tot.margePondere))} />
-        <Indicateur titre="% du CA sécurisé" valeur={formatPourcent(partSecurisee)} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Indicateur titre="Marge maximum (cumulée)" valeur={formatEuro(totalMargeMax)} />
+        <Indicateur titre="Marge probable (cumulée)" valeur={formatEuro(totalMargeProb)} />
       </div>
 
-      {/* Détail par projet */}
       <Card>
         <CardHeader>
-          <CardTitle>Détail par projet</CardTitle>
+          <CardTitle>Prévisionnel mois par mois</CardTitle>
         </CardHeader>
         <CardContent>
           {lignes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Aucun projet forfait actif. Créez un projet et son échéancier pour voir le prévisionnel.
+              Aucune donnée prévisionnelle sur cette période. Posez des jours dans le planning ou
+              ajoutez des échéances aux projets.
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Projet</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Fiabilité</TableHead>
-                  <TableHead className="text-right">Budget</TableHead>
-                  <TableHead className="text-right">Encaissé</TableHead>
-                  <TableHead className="text-right">Reste prévu</TableHead>
-                  <TableHead className="text-right">CA pondéré</TableHead>
-                  <TableHead className="text-right">Coût prévu</TableHead>
-                  <TableHead className="text-right">Marge pondérée</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lignes.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">{l.nom}</TableCell>
-                    <TableCell>{l.clientNom}</TableCell>
-                    <TableCell className="text-muted-foreground">{l.fiabiliteLabel}</TableCell>
-                    <TableCell className="text-right">{formatEuro(l.budget)}</TableCell>
-                    <TableCell className="text-right">{formatEuro(l.encaisse)}</TableCell>
-                    <TableCell className="text-right">{formatEuro(l.restePrevu)}</TableCell>
-                    <TableCell className="text-right">{formatEuro(l.caPondere)}</TableCell>
-                    <TableCell className="text-right">{formatEuro(l.coutTotal)}</TableCell>
-                    <TableCell className={`text-right ${l.margePondere < 0 ? "text-rose-600" : ""}`}>
-                      {formatEuro(l.margePondere)}
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Mois</TableHead>
+                    <TableHead className="text-right">CA max</TableHead>
+                    <TableHead className="text-right">CA probable</TableHead>
+                    <TableHead className="text-right">Charges</TableHead>
+                    <TableHead className="text-right">Marge max</TableHead>
+                    <TableHead className="text-right">Marge probable</TableHead>
+                    <TableHead className="text-right">Marge cumulée max</TableHead>
+                    <TableHead className="text-right">Marge cumulée probable</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colSpan={6} className="font-medium">
-                    Total portefeuille
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatEuro(arrondi(tot.caPondere))}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatEuro(arrondi(tot.coutTotal))}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatEuro(arrondi(tot.margePondere))}
-                  </TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Frise de trésorerie */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Trésorerie prévisionnelle (mois par mois)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {friseLignes.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Aucune échéance datée.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mois</TableHead>
-                  <TableHead className="text-right">Entrées pondérées</TableHead>
-                  <TableHead className="text-right">Sorties</TableHead>
-                  <TableHead className="text-right">Flux net</TableHead>
-                  <TableHead className="text-right">Trésorerie cumulée</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {friseLignes.map((l) => {
-                  const [a, m] = l.cle.split("-").map(Number);
-                  return (
+                </TableHeader>
+                <TableBody>
+                  {lignes.map((l) => (
                     <TableRow key={l.cle}>
-                      <TableCell className="font-medium capitalize">{formatMois(a, m)}</TableCell>
-                      <TableCell className="text-right text-emerald-600">
-                        {formatEuro(l.entrees)}
+                      <TableCell className="font-medium capitalize">{formatMois(l.a, l.m)}</TableCell>
+                      <TableCell className="text-right">{formatEuro(l.caMax)}</TableCell>
+                      <TableCell className="text-right">{formatEuro(l.caProb)}</TableCell>
+                      <TableCell className="text-right text-rose-600">{formatEuro(l.charges)}</TableCell>
+                      <TableCell className={`text-right ${l.margeMax < 0 ? "text-rose-600" : ""}`}>
+                        {formatEuro(l.margeMax)}
                       </TableCell>
-                      <TableCell className="text-right text-rose-600">
-                        {formatEuro(l.sorties)}
+                      <TableCell className={`text-right ${l.margeProb < 0 ? "text-rose-600" : ""}`}>
+                        {formatEuro(l.margeProb)}
                       </TableCell>
-                      <TableCell className={`text-right ${l.flux < 0 ? "text-rose-600" : ""}`}>
-                        {formatEuro(l.flux)}
+                      <TableCell className={`text-right font-medium ${l.cumulMax < 0 ? "text-rose-600" : ""}`}>
+                        {formatEuro(l.cumulMax)}
                       </TableCell>
-                      <TableCell className={`text-right font-medium ${l.cumul < 0 ? "text-rose-600" : ""}`}>
-                        {formatEuro(l.cumul)}
+                      <TableCell className={`text-right font-medium ${l.cumulProb < 0 ? "text-rose-600" : ""}`}>
+                        {formatEuro(l.cumulProb)}
                       </TableCell>
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

@@ -1,22 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getSession } from "@/lib/auth/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatEuro } from "@/lib/format";
 import { ProjetFormDialog } from "./projet-form-dialog";
-import { ProjetDetailDialog } from "./projet-detail-dialog";
-import { ArchiveProjetButton } from "./archive-projet-button";
-import { creerProjet, modifierProjet } from "./actions";
+import { ProjetRow } from "./projet-row";
+import { creerProjet } from "./actions";
 
 type Evenement = {
   id: number;
@@ -34,6 +33,8 @@ export default async function PageProjets({
 }: {
   searchParams: Promise<{ vue?: string }>;
 }) {
+  if (!(await getSession())) redirect("/login");
+
   const { vue } = await searchParams;
   const archives = vue === "archives";
 
@@ -117,8 +118,6 @@ export default async function PageProjets({
     jalParProjet.set(j.projetId, arr);
   }
 
-  const somme = (arr: Evenement[]) => arr.reduce((s, x) => s + Number(x.montant), 0);
-
   // Listes pour les formulaires.
   const clientsListe = await db
     .select({ id: clients.id, nom: clients.nom })
@@ -133,8 +132,7 @@ export default async function PageProjets({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Projets</h1>
+      <div className="flex items-center justify-end">
         {clientsListe.length > 0 ? (
           <ProjetFormDialog
             action={creerProjet}
@@ -190,64 +188,28 @@ export default async function PageProjets({
                   <TableHead className="text-right">Décaissé</TableHead>
                   <TableHead className="text-right">Marge</TableHead>
                   <TableHead className="text-right">Reste à facturer</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {liste.map((p) => {
-                  const enc = encParProjet.get(p.id) ?? [];
-                  const dec = decParProjet.get(p.id) ?? [];
-                  const jal = jalParProjet.get(p.id) ?? [];
-                  // Colonnes du tableau = RÉALISÉ uniquement (le prévu vit dans le prévisionnel).
-                  const totalEnc = somme(enc.filter((e) => e.statut !== "prevu"));
-                  const totalDec = somme(dec.filter((d) => d.statut !== "prevu"));
-                  const marge = totalEnc - totalDec;
-                  const reste = Number(p.budget) - totalEnc;
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-medium">{p.nom}</TableCell>
-                      <TableCell>{p.clientNom}</TableCell>
-                      <TableCell className="text-right">{formatEuro(Number(p.budget))}</TableCell>
-                      <TableCell className="text-right">{formatEuro(totalEnc)}</TableCell>
-                      <TableCell className="text-right">{formatEuro(totalDec)}</TableCell>
-                      <TableCell className={`text-right ${marge < 0 ? "text-rose-600" : ""}`}>
-                        {formatEuro(marge)}
-                      </TableCell>
-                      <TableCell className="text-right">{formatEuro(reste)}</TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <ProjetDetailDialog
-                            projet={{
-                              id: p.id,
-                              nom: p.nom,
-                              clientId: p.clientId,
-                              clientNom: p.clientNom,
-                              budget: p.budget,
-                              fiabiliteDefaut: p.fiabiliteDefaut,
-                              clientFiabilite: p.clientFiabilite,
-                            }}
-                            encaissements={enc}
-                            decaissements={dec}
-                            jalons={jal}
-                            freelancesActifs={freelancesActifs}
-                          />
-                          <ProjetFormDialog
-                            action={modifierProjet}
-                            titre="Modifier le projet"
-                            clientsListe={clientsListe}
-                            projet={{ id: p.id, clientId: p.clientId, nom: p.nom, budget: p.budget }}
-                            trigger={
-                              <Button variant="outline" size="sm">
-                                Modifier
-                              </Button>
-                            }
-                          />
-                          <ArchiveProjetButton id={p.id} actif={p.actif} />
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                {liste.map((p) => (
+                  <ProjetRow
+                    key={p.id}
+                    projet={{
+                      id: p.id,
+                      nom: p.nom,
+                      clientId: p.clientId,
+                      clientNom: p.clientNom,
+                      budget: p.budget,
+                      fiabiliteDefaut: p.fiabiliteDefaut,
+                      clientFiabilite: p.clientFiabilite,
+                      actif: p.actif,
+                    }}
+                    encaissements={encParProjet.get(p.id) ?? []}
+                    decaissements={decParProjet.get(p.id) ?? []}
+                    jalons={jalParProjet.get(p.id) ?? []}
+                    freelancesActifs={freelancesActifs}
+                  />
+                ))}
               </TableBody>
             </Table>
           )}

@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import Image from "next/image";
-import Link from "next/link";
-import { cookies } from "next/headers";
 import "@fontsource-variable/inter";
 import "@fontsource/cal-sans/400.css";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { NavLinks } from "./nav-links";
-import { LogoutButton } from "./logout-button";
-import { verifierSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { Sidebar } from "./sidebar";
+import { DrawerProvider } from "./_drawer/drawer-stack";
+import { estAdmin } from "@/lib/auth/session";
+import { getSession } from "@/lib/auth/server";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = {
   title: "Yvia - Suivi de marge",
@@ -21,39 +22,29 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   // En-tête (logo + navigation + déconnexion) affiché uniquement si connecté.
-  const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const session = await verifierSession(token);
+  const session = await getSession();
+  const [utilisateur] = session
+    ? await db
+        .select({ prenom: users.prenom, nom: users.nom })
+        .from(users)
+        .where(eq(users.id, session.userId))
+    : [];
+  const nomAffiche =
+    [utilisateur?.prenom, utilisateur?.nom].filter(Boolean).join(" ") || session?.email || "";
 
   return (
     <html lang="fr" className="h-full">
-      <body className="flex min-h-full flex-col">
+      <body className="min-h-full">
         {session ? (
-          <header className="border-b bg-background">
-            <nav className="mx-auto flex max-w-6xl items-center gap-1 px-4 py-3">
-              <Link href="/" className="mr-6 flex items-center">
-                <Image
-                  src="/logo-yvia.svg"
-                  alt="Yvia"
-                  width={107}
-                  height={40}
-                  className="h-7 w-auto"
-                  priority
-                />
-              </Link>
-              <NavLinks />
-              <div className="ml-auto flex items-center gap-3">
-                <Link
-                  href="/parametres"
-                  className="hidden text-sm text-muted-foreground hover:text-foreground sm:inline"
-                >
-                  {session.email}
-                </Link>
-                <LogoutButton />
-              </div>
-            </nav>
-          </header>
-        ) : null}
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">{children}</main>
+          <DrawerProvider>
+            <div className="flex min-h-screen">
+              <Sidebar nomAffiche={nomAffiche} admin={estAdmin(session)} />
+              <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
+            </div>
+          </DrawerProvider>
+        ) : (
+          <main className="mx-auto w-full max-w-6xl px-4 py-8">{children}</main>
+        )}
         <Toaster />
       </body>
     </html>

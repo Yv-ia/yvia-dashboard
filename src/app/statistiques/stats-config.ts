@@ -2,13 +2,14 @@
 // Volontairement dans un fichier neutre (pas "use client") pour pouvoir être
 // importées côté serveur sans passer par la frontière client.
 
+// Périodes glissantes exprimées en jours (fenêtre se terminant aujourd'hui),
+// plus une plage personnalisée.
 export const PERIODES = [
-  { key: "mois", label: "Ce mois" },
-  { key: "trimestre", label: "Trimestre en cours" },
-  { key: "annee", label: "Année en cours" },
-  { key: "12mois", label: "12 prochains mois" },
-  { key: "debut", label: "Depuis le début" },
-  { key: "perso", label: "Personnalisé" },
+  { key: "30", label: "30 j" },
+  { key: "90", label: "90 j" },
+  { key: "180", label: "180 j" },
+  { key: "365", label: "365 j" },
+  { key: "perso", label: "Personnaliser" },
 ] as const;
 
 export const GROUPES = [

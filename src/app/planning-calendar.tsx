@@ -70,6 +70,7 @@ export type LigneProjet = {
   id: number;
   nom: string;
   clientNom: string;
+  budget: string; // budget du projet (plafond des encaissements / décaissements)
   evenements: Record<string, EvenementProjet[]>; // date -> événements
 };
 
@@ -86,6 +87,12 @@ export function PlanningCalendar({
 }) {
   // Pop-up d'événements d'un projet, pour une date donnée.
   const [popupProjet, setPopupProjet] = useState<{ projetId: number; date: string } | null>(null);
+  // Étape d'ajout d'un événement dans le pop-up projet :
+  // "" = bouton « Ajouter un événement » ; "menu" = liste déroulante des types ;
+  // sinon = formulaire du type choisi.
+  const [typeAjout, setTypeAjout] = useState<
+    "" | "menu" | "encaissement" | "decaissement" | "jalon"
+  >("");
   // Sélection en cours : un freelance + une plage d'indices de jours.
   const [selection, setSelection] = useState<{
     freelanceId: number;
@@ -167,21 +174,29 @@ export function PlanningCalendar({
   const projetActif = popupProjet ? projets.find((p) => p.id === popupProjet.projetId) ?? null : null;
   const evenementsJour =
     projetActif && popupProjet ? projetActif.evenements[popupProjet.date] ?? [] : [];
+  // Budget du projet : plafond des encaissements / décaissements saisissables.
+  const budgetProjet = projetActif ? Number(projetActif.budget) : 0;
 
   async function ajouterEnc(fd: FormData) {
     const res = await ajouterEncaissement(fd);
-    if (res.ok) toast.success("Encaissement ajouté.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Encaissement ajouté.");
+      setTypeAjout("");
+    } else toast.error(res.message ?? "Erreur.");
   }
   async function ajouterDec(fd: FormData) {
     const res = await ajouterDecaissement(fd);
-    if (res.ok) toast.success("Décaissement ajouté.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Décaissement ajouté.");
+      setTypeAjout("");
+    } else toast.error(res.message ?? "Erreur.");
   }
   async function ajouterJal(fd: FormData) {
     const res = await ajouterJalon(fd);
-    if (res.ok) toast.success("Jalon ajouté.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Jalon ajouté.");
+      setTypeAjout("");
+    } else toast.error(res.message ?? "Erreur.");
   }
   async function supprimerEv(ev: EvenementProjet) {
     const fd = new FormData();
@@ -244,7 +259,10 @@ export function PlanningCalendar({
                 return (
                   <td
                     key={j.date}
-                    onClick={() => setPopupProjet({ projetId: p.id, date: j.date })}
+                    onClick={() => {
+                      setPopupProjet({ projetId: p.id, date: j.date });
+                      setTypeAjout("");
+                    }}
                     title={`${p.nom} · ${formatDate(j.date)}`}
                     className={`h-9 w-9 cursor-pointer border-b border-b-border border-l p-0.5 text-center align-middle ${
                       j.estAujourdhui
@@ -383,12 +401,17 @@ export function PlanningCalendar({
         </DialogContent>
       </Dialog>
 
-      {/* Pop-up des événements d'un projet pour un jour */}
+      {/* Pop-up unique des événements d'un projet pour un jour (élargi) */}
       <Dialog
         open={popupProjet !== null}
-        onOpenChange={(o) => (!o ? setPopupProjet(null) : null)}
+        onOpenChange={(o) => {
+          if (!o) {
+            setPopupProjet(null);
+            setTypeAjout("");
+          }
+        }}
       >
-        <DialogContent>
+        <DialogContent className="min-h-[34rem] content-start sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {projetActif?.nom}
@@ -399,10 +422,13 @@ export function PlanningCalendar({
             </DialogTitle>
           </DialogHeader>
 
-          {/* Événements du jour */}
+          {/* Événements déjà présents ce jour */}
           <div className="space-y-1">
             {evenementsJour.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun événement ce jour.</p>
+              <p className="text-sm text-muted-foreground">
+                Rien n’est encore prévu ni enregistré pour ce projet à cette date. Utilisez le
+                bouton ci-dessous pour ajouter un encaissement, un décaissement ou un jalon.
+              </p>
             ) : (
               evenementsJour.map((ev) => (
                 <div
@@ -445,56 +471,163 @@ export function PlanningCalendar({
             )}
           </div>
 
-          {/* Ajout d'un encaissement */}
-          <form action={ajouterEnc} className="space-y-2 border-t border-border pt-3">
-            <p className="text-sm font-medium text-emerald-600">Ajouter un encaissement</p>
-            <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
-            <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
-            <div className="flex gap-2">
-              <Input name="montant" type="number" min="0" step="1" placeholder="Montant €" required />
-              <Input name="libelle" placeholder="Libellé (optionnel)" />
-              <Button type="submit" size="sm" variant="outline">
-                Ajouter
+          {/* Ajout d'un événement : bouton -> choix du type (intégré) -> formulaire.
+              Choix intégré (et non un menu flottant) pour rester dans l'encart. */}
+          <div className="space-y-3 border-t border-border pt-3">
+            {typeAjout === "" ? (
+              <Button size="sm" onClick={() => setTypeAjout("menu")}>
+                Ajouter un événement
               </Button>
-            </div>
-          </form>
+            ) : (
+              <div className="space-y-1">
+                <Label>Type d’événement</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "encaissement", label: "Encaissement", sous: "recette client" },
+                    { value: "decaissement", label: "Décaissement", sous: "coût freelance" },
+                    { value: "jalon", label: "Jalon", sous: "étape clé" },
+                  ].map((opt) => {
+                    const actif = typeAjout === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() =>
+                          setTypeAjout(opt.value as "encaissement" | "decaissement" | "jalon")
+                        }
+                        className={`flex flex-col rounded-md border px-3 py-2 text-left text-sm transition-colors ${
+                          actif
+                            ? "border-primary bg-primary/10 font-medium text-primary"
+                            : "border-border hover:bg-muted"
+                        }`}
+                      >
+                        <span>{opt.label}</span>
+                        <span className="text-xs text-muted-foreground">{opt.sous}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
-          {/* Ajout d'un décaissement */}
-          <form action={ajouterDec} className="space-y-2 border-t border-border pt-3">
-            <p className="text-sm font-medium text-rose-600">Ajouter un décaissement</p>
-            <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
-            <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
-            <Select
-              name="freelanceId"
-              required
-              defaultValue=""
-              placeholder="Choisir un freelance"
-              options={freelancesActifs.map((f) => ({
-                value: f.id,
-                label: `${f.prenom} ${f.nom}`,
-              }))}
-            />
-            <div className="flex gap-2">
-              <Input name="montant" type="number" min="0" step="1" placeholder="Montant €" required />
-              <Input name="libelle" placeholder="Libellé (optionnel)" />
-              <Button type="submit" size="sm" variant="outline">
-                Ajouter
-              </Button>
-            </div>
-          </form>
+            {/* Budget : affiché une fois un type avec montant choisi */}
+            {typeAjout === "encaissement" || typeAjout === "decaissement" ? (
+              <p className="text-sm text-muted-foreground">
+                Budget du projet :{" "}
+                <span className="font-medium text-foreground">{formatEuro(budgetProjet)}</span>{" "}
+                (montant maximum saisissable)
+              </p>
+            ) : null}
 
-          {/* Ajout d'un jalon (repère sans montant) */}
-          <form action={ajouterJal} className="space-y-2 border-t border-border pt-3">
-            <p className="text-sm font-medium text-amber-600">Ajouter un jalon</p>
-            <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
-            <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
-            <div className="flex gap-2">
-              <Input name="libelle" placeholder="Ex : Livraison V1, recette client…" required />
-              <Button type="submit" size="sm" variant="outline">
-                Ajouter
-              </Button>
-            </div>
-          </form>
+            {typeAjout === "encaissement" ? (
+              <form action={ajouterEnc} className="space-y-3">
+                <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
+                <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
+                <div className="space-y-1">
+                  <Label htmlFor="enc-montant">Montant (€)</Label>
+                  <Input
+                    id="enc-montant"
+                    name="montant"
+                    type="number"
+                    min="0"
+                    max={budgetProjet}
+                    step="1"
+                    placeholder={`Max ${budgetProjet}`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="enc-libelle">Libellé (optionnel)</Label>
+                  <Input id="enc-libelle" name="libelle" placeholder="Ex : acompte, jalon 1…" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="enc-statut">Statut</Label>
+                    <Select
+                      id="enc-statut"
+                      name="statut"
+                      defaultValue="prevu"
+                      options={[
+                        { value: "prevu", label: "Prévu (à venir)" },
+                        { value: "encaisse", label: "Encaissé (reçu)" },
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="enc-fiab">Fiabilité % (si prévu)</Label>
+                    <Input
+                      id="enc-fiab"
+                      name="fiabilite"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      defaultValue="100"
+                      placeholder="0 à 100"
+                    />
+                  </div>
+                </div>
+                <Button type="submit" size="sm" variant="outline">
+                  Ajouter l’encaissement
+                </Button>
+              </form>
+            ) : null}
+
+            {typeAjout === "decaissement" ? (
+              <form action={ajouterDec} className="space-y-3">
+                <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
+                <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
+                <div className="space-y-1">
+                  <Label htmlFor="dec-freelance">Freelance</Label>
+                  <Select
+                    id="dec-freelance"
+                    name="freelanceId"
+                    required
+                    defaultValue=""
+                    placeholder="Choisir un freelance"
+                    options={freelancesActifs.map((f) => ({
+                      value: f.id,
+                      label: `${f.prenom} ${f.nom}`,
+                    }))}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dec-montant">Montant (€)</Label>
+                  <Input
+                    id="dec-montant"
+                    name="montant"
+                    type="number"
+                    min="0"
+                    max={budgetProjet}
+                    step="1"
+                    placeholder={`Max ${budgetProjet}`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="dec-libelle">Libellé (optionnel)</Label>
+                  <Input id="dec-libelle" name="libelle" placeholder="Ex : sprint 1…" />
+                </div>
+                <Button type="submit" size="sm" variant="outline">
+                  Ajouter le décaissement
+                </Button>
+              </form>
+            ) : null}
+
+            {typeAjout === "jalon" ? (
+              <form action={ajouterJal} className="space-y-3">
+                <input type="hidden" name="projetId" value={String(popupProjet?.projetId ?? "")} />
+                <input type="hidden" name="date" value={popupProjet?.date ?? ""} />
+                <div className="space-y-1">
+                  <Label htmlFor="jal-libelle">Libellé</Label>
+                  <Input id="jal-libelle" name="libelle" placeholder="Ex : Livraison V1, recette client…" required />
+                </div>
+                <Button type="submit" size="sm" variant="outline">
+                  Ajouter le jalon
+                </Button>
+              </form>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

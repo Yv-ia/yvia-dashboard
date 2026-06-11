@@ -1,21 +1,21 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { missions, freelances, clients } from "@/db/schema";
 import { eq } from "drizzle-orm";
+import { getSession } from "@/lib/auth/server";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
   TableBody,
-  TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
-import { ToggleActifMissionButton } from "./toggle-actif-mission-button";
-import { creerMission, modifierMission } from "./actions";
+import { MissionRow } from "./mission-row";
+import { creerMission } from "./actions";
 
 const filtres = [
   { slug: "actives", label: "Actives" },
@@ -27,6 +27,8 @@ export default async function PageMissions({
 }: {
   searchParams: Promise<{ statut?: string }>;
 }) {
+  if (!(await getSession())) redirect("/login");
+
   const { statut: filtreActif = "actives" } = await searchParams;
 
   // Missions + noms du freelance et du client.
@@ -69,8 +71,7 @@ export default async function PageMissions({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Missions</h1>
+      <div className="flex items-center justify-end">
         {peutCreer ? (
           <MissionFormDialog
             action={creerMission}
@@ -123,48 +124,25 @@ export default async function PageMissions({
                   <TableHead className="text-right">TJM vente</TableHead>
                   <TableHead className="text-right">Marge/jour</TableHead>
                   <TableHead>Statut</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {lignesAffichees.map((l) => (
-                  <TableRow key={l.id}>
-                    <TableCell className="font-medium">{l.nom}</TableCell>
-                    <TableCell>
-                      {l.freelancePrenom} {l.freelanceNom}
-                    </TableCell>
-                    <TableCell>{l.clientNom}</TableCell>
-                    <TableCell className="text-right">{formatEuro(Number(l.tjmAchat))}</TableCell>
-                    <TableCell className="text-right">{formatEuro(Number(l.tjmVente))}</TableCell>
-                    <TableCell className="text-right">
-                      {formatEuro(Number(l.tjmVente) - Number(l.tjmAchat))}
-                    </TableCell>
-                    <TableCell>{l.actif ? "Actif" : "Inactif"}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <MissionFormDialog
-                          action={modifierMission}
-                          titre="Modifier la mission"
-                          freelancesActifs={freelancesActifs}
-                          clientsListe={clientsListe}
-                          mission={{
-                            id: l.id,
-                            nom: l.nom,
-                            freelanceId: l.freelanceId,
-                            clientId: l.clientId,
-                            tjmAchat: l.tjmAchat,
-                            tjmVente: l.tjmVente,
-                          }}
-                          trigger={
-                            <Button variant="outline" size="sm">
-                              Modifier
-                            </Button>
-                          }
-                        />
-                        <ToggleActifMissionButton id={l.id} actif={l.actif} />
-                      </div>
-                    </TableCell>
-                  </TableRow>
+                  <MissionRow
+                    key={l.id}
+                    l={{
+                      id: l.id,
+                      nom: l.nom,
+                      freelanceId: l.freelanceId,
+                      clientId: l.clientId,
+                      freelancePrenom: l.freelancePrenom,
+                      freelanceNom: l.freelanceNom,
+                      clientNom: l.clientNom,
+                      tjmAchat: l.tjmAchat,
+                      tjmVente: l.tjmVente,
+                      actif: l.actif,
+                    }}
+                  />
                 ))}
               </TableBody>
             </Table>

@@ -4,10 +4,13 @@ import { db } from "@/db";
 import { freelances } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth/server";
 
 export type Resultat = { ok: boolean; message?: string };
 
 export async function creerFreelance(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const prenom = String(formData.get("prenom") ?? "").trim();
   const nom = String(formData.get("nom") ?? "").trim();
   if (!prenom || !nom) return { ok: false, message: "Le prénom et le nom sont obligatoires." };
@@ -23,6 +26,8 @@ export async function creerFreelance(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierFreelance(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const prenom = String(formData.get("prenom") ?? "").trim();
   const nom = String(formData.get("nom") ?? "").trim();
@@ -40,6 +45,8 @@ export async function modifierFreelance(formData: FormData): Promise<Resultat> {
 
 // Active ou désactive un freelance (pas de suppression : voir la spec).
 export async function basculerActif(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";
   if (!id) return { ok: false, message: "Freelance introuvable." };

@@ -5,7 +5,12 @@
 export const SESSION_COOKIE = "yvia_session";
 export const DUREE_SESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
 
-export type Session = { userId: number; email: string; exp: number };
+export type Role = "admin" | "user";
+export type Session = { userId: number; email: string; exp: number; role: Role };
+
+export function estAdmin(session: Session | null | undefined): boolean {
+  return session?.role === "admin";
+}
 
 const TEXT = new TextEncoder();
 
@@ -66,6 +71,8 @@ export async function verifierSession(token: string | undefined | null): Promise
     if (!ok) return null;
     const session = JSON.parse(stringFromB64url(payload)) as Session;
     if (typeof session.exp !== "number" || session.exp < Date.now()) return null;
+    if (typeof session.userId !== "number") return null;
+    if (session.role !== "admin" && session.role !== "user") return null;
     return session;
   } catch {
     return null;

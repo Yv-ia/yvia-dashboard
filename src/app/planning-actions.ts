@@ -9,8 +9,14 @@ import {
   dernierJourDuMois,
   listeJoursOuvresDuMois,
 } from "@/lib/calculs/jours-ouvres";
+import { getSession } from "@/lib/auth/server";
 
 export type Resultat = { ok: boolean; message?: string };
+
+async function verifierConnecte(): Promise<Resultat> {
+  if (await getSession()) return { ok: true };
+  return { ok: false, message: "Vous n'êtes pas connecté." };
+}
 
 // Affecte une liste de jours (AAAA-MM-JJ) d'un freelance à une mission.
 // Tout jour déjà affecté pour ce freelance est réécrit (1 mission par jour max).
@@ -19,6 +25,9 @@ export async function affecterJours(
   freelanceId: number,
   dates: string[]
 ): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
   if (!missionId || !freelanceId || dates.length === 0) {
     return { ok: false, message: "Données manquantes." };
   }
@@ -67,6 +76,9 @@ export async function etendreAuMoisSuivant(
   annee: number,
   mois: number
 ): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
   const suivant = mois === 12 ? { a: annee + 1, m: 1 } : { a: annee, m: mois + 1 };
 
   const joursSource = listeJoursOuvresDuMois(annee, mois);
@@ -142,6 +154,9 @@ export async function modifierTjmAffectation(
   tjmAchat: string,
   tjmVente: string
 ): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
   if (!freelanceId || !date) return { ok: false, message: "Données manquantes." };
   if (tjmAchat.trim() === "" || tjmVente.trim() === "") {
     return { ok: false, message: "Les TJM achat et vente sont obligatoires." };
@@ -167,6 +182,9 @@ export async function libererJours(
   freelanceId: number,
   dates: string[]
 ): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
   if (!freelanceId || dates.length === 0) {
     return { ok: false, message: "Données manquantes." };
   }

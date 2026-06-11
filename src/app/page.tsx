@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/db";
 import {
@@ -28,6 +29,8 @@ import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
 import { PlanningCalendar, type Couleur, type LigneFreelance, type Jour } from "./planning-calendar";
 import { EtendreMoisButton } from "./etendre-mois-button";
+import { EntityLink } from "./_drawer/drawer-stack";
+import { getSession } from "@/lib/auth/server";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const moisSuivant = (a: number, m: number) =>
@@ -56,6 +59,8 @@ export default async function PagePlanning({
 }: {
   searchParams: Promise<{ annee?: string; mois?: string }>;
 }) {
+  if (!(await getSession())) redirect("/login");
+
   const params = await searchParams;
   const maintenant = new Date();
   const annee = Number(params.annee) || maintenant.getUTCFullYear();
@@ -122,7 +127,7 @@ export default async function PagePlanning({
 
   // --- Projets (forfait) : lignes du calendrier + flux du mois ---
   const projetsActifs = await db
-    .select({ id: projets.id, nom: projets.nom, clientNom: clients.nom })
+    .select({ id: projets.id, nom: projets.nom, clientNom: clients.nom, budget: projets.budget })
     .from(projets)
     .innerJoin(clients, eq(projets.clientId, clients.id))
     .where(eq(projets.actif, true))
@@ -222,6 +227,7 @@ export default async function PagePlanning({
     id: p.id,
     nom: p.nom,
     clientNom: p.clientNom,
+    budget: p.budget,
     evenements: evenementsParProjet.get(p.id) ?? {},
   }));
 
@@ -329,10 +335,62 @@ export default async function PagePlanning({
   const totalMarge = arrondi(totalCa - totalCout);
   const tauxMarge = totalCa > 0 ? totalMarge / totalCa : 0;
 
+  // --- Détail du mois : missions (régie) ET projets (forfait) réunis ---
+  // Colonnes communes : encaissements (argent entrant) / décaissements (argent
+  // sortant). Les colonnes Jours et Freelance n'ont de sens que pour les missions.
+  type LigneDetail = {
+    cle: string;
+    libelle: string;
+    freelanceNom: string | null;
+    clientNom: string;
+    encaissements: number;
+    decaissements: number;
+    jours: number | null;
+    marge: number;
+  };
+  const detailMissions: LigneDetail[] = detail.map((l) => ({
+    cle: `m${l.missionId}`,
+    libelle: l.missionNom,
+    freelanceNom: l.freelanceNom,
+    clientNom: l.clientNom,
+    encaissements: l.ca, // ce que paie le client (TJM vente × jours)
+    decaissements: l.cout, // ce qu'on verse au freelance (TJM achat × jours)
+    jours: l.jours,
+    marge: l.marge,
+  }));
+
+  // Agrégation des flux forfait par projet sur le mois affiché.
+  const projAgg = new Map<number, { enc: number; dec: number }>();
+  for (const e of encMois) {
+    const a = projAgg.get(e.projetId) ?? { enc: 0, dec: 0 };
+    a.enc += Number(e.montant);
+    projAgg.set(e.projetId, a);
+  }
+  for (const d of decMois) {
+    const a = projAgg.get(d.projetId) ?? { enc: 0, dec: 0 };
+    a.dec += Number(d.montant);
+    projAgg.set(d.projetId, a);
+  }
+  const detailProjets: LigneDetail[] = projetsActifs
+    .filter((p) => projAgg.has(p.id))
+    .map((p) => {
+      const a = projAgg.get(p.id)!;
+      return {
+        cle: `p${p.id}`,
+        libelle: p.nom,
+        freelanceNom: null, // pas de freelance unique sur un forfait
+        clientNom: p.clientNom,
+        encaissements: arrondi(a.enc),
+        decaissements: arrondi(a.dec),
+        jours: null, // notion propre à la régie
+        marge: arrondi(a.enc - a.dec),
+      };
+    });
+  const detailLignes = [...detailMissions, ...detailProjets];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Planning</h1>
+      <div className="flex items-center justify-end">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
@@ -422,36 +480,42 @@ export default async function PagePlanning({
           <CardTitle>Détail du mois</CardTitle>
         </CardHeader>
         <CardContent>
-          {detail.length === 0 ? (
+          {detailLignes.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              Aucun jour affecté ce mois-ci. Le détail apparaîtra une fois le planning rempli.
+              Aucune activité ce mois-ci. Le détail apparaîtra une fois le planning rempli ou des
+              flux forfait enregistrés.
             </p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Mission</TableHead>
+                  <TableHead>Mission / Projet</TableHead>
                   <TableHead>Freelance</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead className="text-right">TJM achat</TableHead>
-                  <TableHead className="text-right">TJM vente</TableHead>
+                  <TableHead className="text-right">Encaissements</TableHead>
+                  <TableHead className="text-right">Décaissements</TableHead>
                   <TableHead className="text-right">Jours</TableHead>
                   <TableHead className="text-right">Marge du mois</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {detail.map((l) => (
-                  <TableRow key={l.missionId}>
-                    <TableCell className="font-medium">{l.missionNom}</TableCell>
-                    <TableCell>{l.freelanceNom}</TableCell>
+                {detailLignes.map((l) => (
+                  <TableRow key={l.cle}>
+                    <TableCell>
+                      <EntityLink
+                        type={l.cle.startsWith("p") ? "projet" : "mission"}
+                        id={Number(l.cle.slice(1))}
+                      >
+                        {l.libelle}
+                      </EntityLink>
+                    </TableCell>
+                    <TableCell>{l.freelanceNom ?? "-"}</TableCell>
                     <TableCell>{l.clientNom}</TableCell>
+                    <TableCell className="text-right">{formatEuro(l.encaissements)}</TableCell>
+                    <TableCell className="text-right">{formatEuro(l.decaissements)}</TableCell>
                     <TableCell className="text-right">
-                      {l.tjmAchat !== null ? formatEuro(l.tjmAchat) : "-"}
+                      {l.jours !== null ? formatJours(l.jours) : "-"}
                     </TableCell>
-                    <TableCell className="text-right">
-                      {l.tjmVente !== null ? formatEuro(l.tjmVente) : "-"}
-                    </TableCell>
-                    <TableCell className="text-right">{formatJours(l.jours)}</TableCell>
                     <TableCell className="text-right">{formatEuro(l.marge)}</TableCell>
                   </TableRow>
                 ))}

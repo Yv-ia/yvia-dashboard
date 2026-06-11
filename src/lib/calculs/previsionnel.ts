@@ -33,6 +33,23 @@ export function probaDe(key: Fiabilite): number {
   return PAR_KEY.get(key)?.proba ?? 0;
 }
 
+// Fiabilité d'un encaissement = un pourcentage (0 à 100) saisi manuellement,
+// stocké en texte. Renvoie la fraction (0 à 1) utilisée pour pondérer.
+// Rétrocompatible : une ancienne catégorie ("probable"...) retombe sur sa proba ;
+// vide / inconnu = 100 % (l'encaissement compte alors en totalité).
+export function fractionFiabilite(fiabilite: string | null | undefined): number {
+  if (fiabilite == null || fiabilite === "") return 1;
+  const n = Number(fiabilite);
+  if (Number.isFinite(n)) return Math.min(1, Math.max(0, n / 100));
+  if (estFiabilite(fiabilite)) return probaDe(fiabilite);
+  return 1;
+}
+
+// Pourcentage entier (0 à 100) pour l'affichage.
+export function pourcentFiabilite(fiabilite: string | null | undefined): number {
+  return Math.round(fractionFiabilite(fiabilite) * 100);
+}
+
 // Cascade de résolution : on prend la première valeur renseignée, dans l'ordre
 // échéance -> projet -> client, sinon le filet global.
 export function resoudreFiabilite(

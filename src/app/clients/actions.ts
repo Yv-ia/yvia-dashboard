@@ -6,10 +6,13 @@ import { db } from "@/db";
 import { clients } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getSession } from "@/lib/auth/server";
 
 export type Resultat = { ok: boolean; message?: string };
 
 export async function creerClient(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const nom = String(formData.get("nom") ?? "").trim();
   if (!nom) return { ok: false, message: "Le nom de la société est obligatoire." };
 
@@ -21,6 +24,8 @@ export async function creerClient(formData: FormData): Promise<Resultat> {
 }
 
 export async function modifierClient(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const nom = String(formData.get("nom") ?? "").trim();
   if (!id) return { ok: false, message: "Client introuvable." };
@@ -34,6 +39,8 @@ export async function modifierClient(formData: FormData): Promise<Resultat> {
 
 // Archive / désarchive un client (on ne supprime pas, pour garder l'historique).
 export async function basculerActifClient(formData: FormData): Promise<Resultat> {
+  if (!(await getSession())) return { ok: false, message: "Vous n'êtes pas connecté." };
+
   const id = Number(formData.get("id"));
   const actif = String(formData.get("actif")) === "true";
   if (!id) return { ok: false, message: "Client introuvable." };
