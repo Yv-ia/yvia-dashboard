@@ -5,8 +5,11 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "prepare": "node scripts/install-git-hooks.mjs",
     "start": "next start",
     "lint": "eslint",
+    "hooks:install": "node scripts/install-git-hooks.mjs",
+    "verify:ci": "npm run lint && npm test -- --run && npm run build",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "creer-utilisateur": "node scripts/creer-utilisateur.mjs",

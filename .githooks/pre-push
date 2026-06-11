@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+set -eu
+
+echo "Verification CI locale avant push..."
+npm run verify:ci
