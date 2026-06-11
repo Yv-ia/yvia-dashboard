@@ -129,16 +129,12 @@ export default async function PageProjets({
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-end">
-        {clientsListe.length > 0 ? (
-          <ProjetFormDialog
-            action={creerProjet}
-            titre="Nouveau projet"
-            clientsListe={clientsListe}
-            trigger={<Button>Nouveau projet</Button>}
-          />
-        ) : (
-          <p className="text-sm text-muted-foreground">Ajoutez d’abord un client.</p>
-        )}
+        <ProjetFormDialog
+          action={creerProjet}
+          titre="Nouveau projet"
+          clientsListe={clientsListe}
+          trigger={<Button>Nouveau projet</Button>}
+        />
       </div>
 
       {/* Onglets Actifs / Archives */}
