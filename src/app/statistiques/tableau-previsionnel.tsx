@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,9 +12,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatEuro, formatJours, formatMois, formatPourcent } from "@/lib/format";
+import { formatEuro, formatJours, formatMois } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { DetailsPrevisionnel, LignePrevisionnel } from "./pilotage-calculs";
+import { lignesDetailMois, type DetailsPrevisionnel, type LignePrevisionnel } from "./pilotage-calculs";
 
 export function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] }) {
   const [lignesOuvertes, setLignesOuvertes] = useState<Set<string>>(() => new Set());
@@ -113,139 +113,55 @@ export function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] })
   );
 }
 
+// Même tableau que le « Détail du mois » du dashboard.
 function DetailsMois({ details }: { details: DetailsPrevisionnel }) {
+  const lignes = lignesDetailMois(details);
+  const totalMarge = lignes.reduce((s, l) => s + l.marge, 0);
+
   return (
-    <div className="grid gap-4 border-t border-border bg-muted/20 p-3 lg:grid-cols-3">
-      <BlocDetails titre="Freelances planifiés" vide={details.regie.length === 0 ? "Aucun jour freelance prévu." : null}>
-        {details.regie.length ? (
-          <div className="space-y-2">
-            {details.regie.map((ligne) => (
-              <div key={ligne.cle} className="grid gap-1 rounded-md border border-border bg-background p-2">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-medium">{ligne.freelanceNom}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {ligne.missionNom} · {ligne.clientNom}
-                    </p>
-                  </div>
-                  <span className="shrink-0 text-xs font-medium">{formatJours(ligne.jours)} j</span>
-                </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                  <MontantCompact label="CA" valeur={ligne.caMax} />
-                  <MontantCompact label="Coût" valeur={ligne.charges} negatif />
-                  <MontantCompact label="Marge" valeur={ligne.marge} negatif={ligne.marge < 0} />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </BlocDetails>
-
-      <BlocDetails
-        titre="Encaissements prévus"
-        vide={details.encaissements.length === 0 ? "Aucun encaissement prévu." : null}
-      >
-        <div className="space-y-2">
-          {details.encaissements.map((ligne) => (
-            <div
-              key={`${ligne.date}-${ligne.projetNom}-${ligne.montant}`}
-              className="grid gap-1 rounded-md border border-border bg-background p-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{ligne.projetNom}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {formatDate(ligne.date)} · {ligne.clientNom}
-                    {ligne.libelle ? ` · ${ligne.libelle}` : ""}
-                  </p>
-                </div>
-                <span className="shrink-0 font-medium">{formatEuro(ligne.montant)}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Probable : {formatEuro(ligne.montantProbable)} · Fiabilité {formatFiabilite(ligne.fiabilite)}
-              </p>
-            </div>
+    <div className="border-t border-border bg-muted/20 p-3">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Mission / Projet</TableHead>
+            <TableHead>Freelance</TableHead>
+            <TableHead>Client</TableHead>
+            <TableHead className="text-right">Encaissements</TableHead>
+            <TableHead className="text-right">Décaissements</TableHead>
+            <TableHead className="text-right">Jours</TableHead>
+            <TableHead className="text-right">Marge du mois</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {lignes.map((l) => (
+            <TableRow key={l.cle}>
+              <TableCell>{l.libelle}</TableCell>
+              <TableCell>{l.freelanceNom ?? "-"}</TableCell>
+              <TableCell>{l.clientNom}</TableCell>
+              <TableCell className="text-right">{formatEuro(l.encaissements)}</TableCell>
+              <TableCell className="text-right">{formatEuro(l.decaissements)}</TableCell>
+              <TableCell className="text-right">
+                {l.jours !== null ? formatJours(l.jours) : "-"}
+              </TableCell>
+              <TableCell className="text-right">{formatEuro(l.marge)}</TableCell>
+            </TableRow>
           ))}
-        </div>
-      </BlocDetails>
-
-      <BlocDetails
-        titre="Décaissements prévus"
-        vide={details.decaissements.length === 0 ? "Aucun décaissement prévu." : null}
-      >
-        <div className="space-y-2">
-          {details.decaissements.map((ligne) => (
-            <div
-              key={`${ligne.date}-${ligne.projetNom}-${ligne.freelanceNom}-${ligne.montant}`}
-              className="grid gap-1 rounded-md border border-border bg-background p-2"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{ligne.freelanceNom}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {formatDate(ligne.date)} · {ligne.projetNom} · {ligne.clientNom}
-                    {ligne.libelle ? ` · ${ligne.libelle}` : ""}
-                  </p>
-                </div>
-                <span className="shrink-0 font-medium text-rose-600">{formatEuro(ligne.montant)}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </BlocDetails>
+        </TableBody>
+        <TableFooter>
+          <TableRow>
+            <TableCell colSpan={6} className="font-medium">
+              Total
+            </TableCell>
+            <TableCell className="text-right font-medium">{formatEuro(totalMarge)}</TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
     </div>
-  );
-}
-
-function BlocDetails({
-  titre,
-  vide,
-  children,
-}: {
-  titre: string;
-  vide: string | null;
-  children: ReactNode;
-}) {
-  return (
-    <section className="min-w-0 space-y-2">
-      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{titre}</h3>
-      {vide ? (
-        <p className="rounded-md border border-dashed border-border bg-background px-2 py-3 text-xs text-muted-foreground">
-          {vide}
-        </p>
-      ) : (
-        children
-      )}
-    </section>
-  );
-}
-
-function MontantCompact({
-  label,
-  valeur,
-  negatif = false,
-}: {
-  label: string;
-  valeur: number;
-  negatif?: boolean;
-}) {
-  return (
-    <p className="min-w-0">
-      <span className="block text-muted-foreground">{label}</span>
-      <span className={cn("font-medium", negatif && "text-rose-600")}>{formatEuro(valeur)}</span>
-    </p>
   );
 }
 
 function aDesDetails(details: DetailsPrevisionnel) {
   return details.regie.length > 0 || details.encaissements.length > 0 || details.decaissements.length > 0;
-}
-
-function formatFiabilite(fiabilite: string | null) {
-  if (!fiabilite) return formatPourcent(1);
-  const n = Number(fiabilite);
-  if (Number.isFinite(n)) return formatPourcent(n / 100);
-  return fiabilite;
 }
 
 function totaliserPrevisionnel(lignes: LignePrevisionnel[]) {
