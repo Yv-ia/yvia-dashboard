@@ -113,6 +113,7 @@ export default async function PageMissions({
                   <TableHead className="text-right">TJM achat</TableHead>
                   <TableHead className="text-right">TJM vente</TableHead>
                   <TableHead className="text-right">Marge / jour</TableHead>
+                  <TableHead>Statut</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
