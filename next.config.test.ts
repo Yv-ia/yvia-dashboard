@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import nextConfig from "./next.config";
+import nextConfig, { creerCsp } from "./next.config";
 
 async function lireCsp(): Promise<string> {
   const routes = await nextConfig.headers?.();
@@ -13,5 +13,13 @@ async function lireCsp(): Promise<string> {
 describe("next.config Content-Security-Policy", () => {
   it("autorise les scripts inline nécessaires au bootstrap Next", async () => {
     await expect(lireCsp()).resolves.toContain("script-src 'self' 'unsafe-inline'");
+  });
+
+  it("autorise le widget Vercel Live sur les previews", () => {
+    const csp = creerCsp({ VERCEL_ENV: "preview", NODE_ENV: "production" });
+
+    expect(csp).toContain("script-src 'self' 'unsafe-inline' https://vercel.live");
+    expect(csp).toContain("connect-src 'self' https://vercel.live wss://ws-us3.pusher.com");
+    expect(csp).toContain("frame-src https://vercel.live");
   });
 });
