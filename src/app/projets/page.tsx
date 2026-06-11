@@ -5,6 +5,7 @@ import { projets, clients, freelances, encaissements, decaissements, jalons } fr
 import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
   Table,
   TableBody,
@@ -128,21 +129,17 @@ export default async function PageProjets({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        {clientsListe.length > 0 ? (
+      {/* Onglets Actifs / Archives */}
+      <ListViewToolbar
+        action={
           <ProjetFormDialog
             action={creerProjet}
             titre="Nouveau projet"
             clientsListe={clientsListe}
             trigger={<Button>Nouveau projet</Button>}
           />
-        ) : (
-          <p className="text-sm text-muted-foreground">Ajoutez d’abord un client.</p>
-        )}
-      </div>
-
-      {/* Onglets Actifs / Archives */}
-      <div className="flex gap-1">
+        }
+      >
         <Link
           href="/projets"
           className={`rounded-md px-3 py-1.5 text-sm ${
@@ -159,7 +156,7 @@ export default async function PageProjets({
         >
           Archives
         </Link>
-      </div>
+      </ListViewToolbar>
 
       <Card>
         <CardHeader>
