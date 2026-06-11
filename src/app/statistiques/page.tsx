@@ -2,6 +2,8 @@ import { db } from "@/db";
 import {
   affectations,
   missions,
+  clients,
+  freelances,
   projets,
   encaissements,
   decaissements,
@@ -25,6 +27,7 @@ import {
   type LignePrevisionnel,
   type LigneRealise,
 } from "./pilotage-calculs";
+import { TableauPrevisionnel } from "./tableau-previsionnel";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const isoJour = (d: Date) => d.toISOString().slice(0, 10);
@@ -63,9 +66,15 @@ export default async function PageStatistiques() {
       date: affectations.date,
       tjmAchat: affectations.tjmAchat,
       tjmVente: affectations.tjmVente,
+      freelancePrenom: freelances.prenom,
+      freelanceNomDb: freelances.nom,
+      missionNom: missions.nom,
+      clientNom: clients.nom,
     })
     .from(affectations)
     .innerJoin(missions, eq(affectations.missionId, missions.id))
+    .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
+    .innerJoin(clients, eq(missions.clientId, clients.id))
     .where(
       and(gte(affectations.date, debutPrevisionnel), lte(affectations.date, finPrevisionnel))
     );
@@ -95,9 +104,13 @@ export default async function PageStatistiques() {
       montant: encaissements.montant,
       statut: encaissements.statut,
       fiabilite: encaissements.fiabilite,
+      projetNom: projets.nom,
+      clientNom: clients.nom,
+      libelle: encaissements.libelle,
     })
     .from(encaissements)
     .innerJoin(projets, eq(encaissements.projetId, projets.id))
+    .innerJoin(clients, eq(projets.clientId, clients.id))
     .where(
       and(
         eq(encaissements.statut, "prevu"),
@@ -131,9 +144,16 @@ export default async function PageStatistiques() {
       date: decaissements.date,
       montant: decaissements.montant,
       statut: decaissements.statut,
+      projetNom: projets.nom,
+      clientNom: clients.nom,
+      freelancePrenom: freelances.prenom,
+      freelanceNomDb: freelances.nom,
+      libelle: decaissements.libelle,
     })
     .from(decaissements)
     .innerJoin(projets, eq(decaissements.projetId, projets.id))
+    .innerJoin(clients, eq(projets.clientId, clients.id))
+    .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
     .where(
       and(
         eq(decaissements.statut, "prevu"),
@@ -161,9 +181,27 @@ export default async function PageStatistiques() {
   const pilotage = calculerPilotageMensuel({
     debutPrevisionnel,
     finPrevisionnel,
-    affectations: affs,
+    affectations: affs.map((a) => ({
+      date: a.date,
+      tjmAchat: a.tjmAchat,
+      tjmVente: a.tjmVente,
+      freelanceNom: `${a.freelancePrenom} ${a.freelanceNomDb}`,
+      missionNom: a.missionNom,
+      clientNom: a.clientNom,
+    })),
     encaissements: [...encaissementsRealises, ...encaissementsPrevus],
-    decaissements: [...decaissementsRealises, ...decaissementsPrevus],
+    decaissements: [
+      ...decaissementsRealises,
+      ...decaissementsPrevus.map((d) => ({
+        date: d.date,
+        montant: d.montant,
+        statut: d.statut,
+        projetNom: d.projetNom,
+        clientNom: d.clientNom,
+        freelanceNom: `${d.freelancePrenom} ${d.freelanceNomDb}`,
+        libelle: d.libelle,
+      })),
+    ],
   });
 
   const totalRealise = totaliserRealise(pilotage.realise);
@@ -295,62 +333,6 @@ function TableauRealise({ lignes }: { lignes: LigneRealise[] }) {
             {formatEuro(total.marge)}
           </TableCell>
           <TableCell className="text-right">{formatPourcent(total.taux)}</TableCell>
-        </TableRow>
-      </TableFooter>
-    </Table>
-  );
-}
-
-function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] }) {
-  const total = totaliserPrevisionnel(lignes);
-
-  return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Mois</TableHead>
-          <TableHead className="text-right">CA max</TableHead>
-          <TableHead className="text-right">CA probable</TableHead>
-          <TableHead className="text-right">Charges prévues</TableHead>
-          <TableHead className="text-right">Marge max</TableHead>
-          <TableHead className="text-right">Marge probable</TableHead>
-          <TableHead className="text-right">Cumul probable</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {lignes.map((l) => (
-          <TableRow key={l.cle}>
-            <TableCell className="font-medium capitalize">{formatMois(l.annee, l.mois)}</TableCell>
-            <TableCell className="text-right">{formatEuro(l.caMax)}</TableCell>
-            <TableCell className="text-right">{formatEuro(l.caProb)}</TableCell>
-            <TableCell className="text-right text-rose-600">{formatEuro(l.charges)}</TableCell>
-            <TableCell className={`text-right ${l.margeMax < 0 ? "text-rose-600" : ""}`}>
-              {formatEuro(l.margeMax)}
-            </TableCell>
-            <TableCell className={`text-right ${l.margeProb < 0 ? "text-rose-600" : ""}`}>
-              {formatEuro(l.margeProb)}
-            </TableCell>
-            <TableCell className={`text-right font-medium ${l.cumulProb < 0 ? "text-rose-600" : ""}`}>
-              {formatEuro(l.cumulProb)}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-      <TableFooter>
-        <TableRow>
-          <TableCell>Total</TableCell>
-          <TableCell className="text-right">{formatEuro(total.caMax)}</TableCell>
-          <TableCell className="text-right">{formatEuro(total.caProb)}</TableCell>
-          <TableCell className="text-right">{formatEuro(total.charges)}</TableCell>
-          <TableCell className={`text-right ${total.margeMax < 0 ? "text-rose-600" : ""}`}>
-            {formatEuro(total.margeMax)}
-          </TableCell>
-          <TableCell className={`text-right ${total.margeProb < 0 ? "text-rose-600" : ""}`}>
-            {formatEuro(total.margeProb)}
-          </TableCell>
-          <TableCell className={`text-right ${total.cumulProb < 0 ? "text-rose-600" : ""}`}>
-            {formatEuro(total.cumulProb)}
-          </TableCell>
         </TableRow>
       </TableFooter>
     </Table>
