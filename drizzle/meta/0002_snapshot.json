@@ -1,6 +1,6 @@
 {
-  "id": "d5d43ef3-c9ce-4f72-a0d4-3a9702650259",
-  "prevId": "724634c6-3a4b-45f6-ae4a-268fbd37ca3f",
+  "id": "0a8cc994-c412-4b1e-8d71-9c52496c6573",
+  "prevId": "d5d43ef3-c9ce-4f72-a0d4-3a9702650259",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -304,6 +304,13 @@
         },
         "actif": {
           "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        },
+        "afficher_planning": {
+          "name": "afficher_planning",
           "type": "boolean",
           "primaryKey": false,
           "notNull": true,
