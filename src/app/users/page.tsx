@@ -26,28 +26,29 @@ export default async function PageUsers() {
   if (!session) redirect("/login");
   if (!estAdmin(session)) redirect("/");
 
-  const liste = await db
-    .select({
-      id: users.id,
-      email: users.email,
-      prenom: users.prenom,
-      nom: users.nom,
-      role: users.role,
-    })
-    .from(users)
-    .orderBy(users.nom, users.prenom, users.email);
-
-  const enAttente = await db
-    .select({
-      id: invitations.id,
-      email: invitations.email,
-      prenom: invitations.prenom,
-      nom: invitations.nom,
-      token: invitations.token,
-    })
-    .from(invitations)
-    .where(and(eq(invitations.utilisee, false), gt(invitations.expireLe, new Date().toISOString())))
-    .orderBy(invitations.id);
+  const [liste, enAttente] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        email: users.email,
+        prenom: users.prenom,
+        nom: users.nom,
+        role: users.role,
+      })
+      .from(users)
+      .orderBy(users.nom, users.prenom, users.email),
+    db
+      .select({
+        id: invitations.id,
+        email: invitations.email,
+        prenom: invitations.prenom,
+        nom: invitations.nom,
+        token: invitations.token,
+      })
+      .from(invitations)
+      .where(and(eq(invitations.utilisee, false), gt(invitations.expireLe, new Date().toISOString())))
+      .orderBy(invitations.id),
+  ]);
 
   return (
     <div className="space-y-6">

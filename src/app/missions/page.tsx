@@ -29,35 +29,35 @@ export default async function PageMissions({
   await exigerSession();
   const { statut: filtreActif = "actives" } = await searchParams;
 
-  const missionsRows = await db
-    .select({
-      id: missions.id,
-      nom: missions.nom,
-      freelanceId: missions.freelanceId,
-      clientId: missions.clientId,
-      tjmAchat: missions.tjmAchat,
-      tjmVente: missions.tjmVente,
-      actif: missions.actif,
-      freelancePrenom: freelances.prenom,
-      freelanceNom: freelances.nom,
-      clientNom: clients.nom,
-    })
-    .from(missions)
-    .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
-    .innerJoin(clients, eq(missions.clientId, clients.id))
-    .orderBy(missions.id);
-
-  const freelancesActifs = await db
-    .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-    .from(freelances)
-    .where(eq(freelances.actif, true))
-    .orderBy(freelances.nom);
-
-  const clientsActifs = await db
-    .select({ id: clients.id, nom: clients.nom })
-    .from(clients)
-    .where(eq(clients.actif, true))
-    .orderBy(clients.nom);
+  const [missionsRows, freelancesActifs, clientsActifs] = await Promise.all([
+    db
+      .select({
+        id: missions.id,
+        nom: missions.nom,
+        freelanceId: missions.freelanceId,
+        clientId: missions.clientId,
+        tjmAchat: missions.tjmAchat,
+        tjmVente: missions.tjmVente,
+        actif: missions.actif,
+        freelancePrenom: freelances.prenom,
+        freelanceNom: freelances.nom,
+        clientNom: clients.nom,
+      })
+      .from(missions)
+      .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .orderBy(missions.id),
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .where(eq(freelances.actif, true))
+      .orderBy(freelances.nom),
+    db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.actif, true))
+      .orderBy(clients.nom),
+  ]);
 
   const actives = filtreActif !== "inactives";
   const liste = missionsRows.filter((m) => m.actif === actives);

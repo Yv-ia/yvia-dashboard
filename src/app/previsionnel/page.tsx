@@ -78,7 +78,7 @@ export default async function PagePrevisionnel({
   if (selFreelances.length) condRegie.push(inArray(affectations.freelanceId, selFreelances));
   if (selClients.length) condRegie.push(inArray(missions.clientId, selClients));
   if (selMissions.length) condRegie.push(inArray(affectations.missionId, selMissions));
-  const affs = await db
+  const affsPromise = db
     .select({ date: affectations.date, tjmAchat: affectations.tjmAchat, tjmVente: affectations.tjmVente })
     .from(affectations)
     .innerJoin(missions, eq(affectations.missionId, missions.id))
@@ -86,14 +86,16 @@ export default async function PagePrevisionnel({
 
   // --- Forfait : un projet n'est pas une mission, on l'exclut si filtre missions ---
   const forfaitActif = selMissions.length === 0;
-  let encs: { date: string; montant: string; statut: string; fiabilite: string | null }[] = [];
-  let decs: { date: string; montant: string }[] = [];
+  type EncPrevisionnel = { date: string; montant: string; statut: string; fiabilite: string | null };
+  type DecPrevisionnel = { date: string; montant: string };
+  let encsPromise: Promise<EncPrevisionnel[]> = Promise.resolve([]);
+  let decsPromise: Promise<DecPrevisionnel[]> = Promise.resolve([]);
   if (forfaitActif) {
     const condEnc = [gte(encaissements.date, debut), lte(encaissements.date, fin)];
     if (selClients.length) condEnc.push(inArray(projets.clientId, selClients));
     // Les encaissements n'ont pas de freelance : exclus si un filtre freelance est posé.
     if (selFreelances.length === 0) {
-      encs = await db
+      encsPromise = db
         .select({
           date: encaissements.date,
           montant: encaissements.montant,
@@ -107,12 +109,33 @@ export default async function PagePrevisionnel({
     const condDec = [gte(decaissements.date, debut), lte(decaissements.date, fin)];
     if (selClients.length) condDec.push(inArray(projets.clientId, selClients));
     if (selFreelances.length) condDec.push(inArray(decaissements.freelanceId, selFreelances));
-    decs = await db
+    decsPromise = db
       .select({ date: decaissements.date, montant: decaissements.montant })
       .from(decaissements)
       .innerJoin(projets, eq(decaissements.projetId, projets.id))
       .where(and(...condDec));
   }
+
+  // Options des filtres (mêmes que les statistiques).
+  const optionsPromise = Promise.all([
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .orderBy(freelances.nom),
+    db.select({ id: clients.id, nom: clients.nom }).from(clients).orderBy(clients.nom),
+    db
+      .select({ id: missions.id, nom: missions.nom, clientNom: clients.nom })
+      .from(missions)
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .orderBy(missions.nom),
+  ]);
+
+  const [affs, encs, decs, [optFreelances, optClients, optMissions]] = await Promise.all([
+    affsPromise,
+    encsPromise,
+    decsPromise,
+    optionsPromise,
+  ]);
 
   // Agrégation par mois.
   type M = { caMax: number; caProb: number; charges: number };
@@ -194,20 +217,6 @@ export default async function PagePrevisionnel({
 
   const totalMargeMax = lignes.length ? lignes[lignes.length - 1].cumulMax : 0;
   const totalMargeProb = lignes.length ? lignes[lignes.length - 1].cumulProb : 0;
-
-  // Options des filtres (mêmes que les statistiques).
-  const [optFreelances, optClients, optMissions] = await Promise.all([
-    db
-      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-      .from(freelances)
-      .orderBy(freelances.nom),
-    db.select({ id: clients.id, nom: clients.nom }).from(clients).orderBy(clients.nom),
-    db
-      .select({ id: missions.id, nom: missions.nom, clientNom: clients.nom })
-      .from(missions)
-      .innerJoin(clients, eq(missions.clientId, clients.id))
-      .orderBy(missions.nom),
-  ]);
 
   return (
     <div className="space-y-6">

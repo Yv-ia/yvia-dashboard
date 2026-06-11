@@ -25,19 +25,20 @@ export default async function PageFreelances({
   const { vue } = await searchParams;
   const archives = vue === "archives";
 
-  const liste = await db
-    .select()
-    .from(freelances)
-    .where(eq(freelances.actif, !archives))
-    .orderBy(freelances.nom);
-
-  const affs = await db
-    .select({
-      freelanceId: affectations.freelanceId,
-      tjmAchat: affectations.tjmAchat,
-      tjmVente: affectations.tjmVente,
-    })
-    .from(affectations);
+  const [liste, affs] = await Promise.all([
+    db
+      .select()
+      .from(freelances)
+      .where(eq(freelances.actif, !archives))
+      .orderBy(freelances.nom),
+    db
+      .select({
+        freelanceId: affectations.freelanceId,
+        tjmAchat: affectations.tjmAchat,
+        tjmVente: affectations.tjmVente,
+      })
+      .from(affectations),
+  ]);
   const gainParFreelance = new Map<number, number>();
   for (const a of affs) {
     const g = gainParFreelance.get(a.freelanceId) ?? 0;

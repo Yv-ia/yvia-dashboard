@@ -36,49 +36,67 @@ export default async function PageProjets({
   const { vue } = await searchParams;
   const archives = vue === "archives";
 
-  const liste = await db
-    .select({
-      id: projets.id,
-      nom: projets.nom,
-      budget: projets.budget,
-      clientId: projets.clientId,
-      clientNom: clients.nom,
-      clientFiabilite: clients.fiabiliteDefaut,
-      fiabiliteDefaut: projets.fiabiliteDefaut,
-      actif: projets.actif,
-    })
-    .from(projets)
-    .innerJoin(clients, eq(projets.clientId, clients.id))
-    .where(eq(projets.actif, !archives))
-    .orderBy(projets.nom);
-
   // On récupère TOUT l'échéancier (prévu + réalisé) : le dialogue "Gérer" en a besoin.
   // Les colonnes du tableau, elles, ne compteront que le réalisé (filtré plus bas).
-  const encRows = await db
-    .select({
-      id: encaissements.id,
-      projetId: encaissements.projetId,
-      date: encaissements.date,
-      montant: encaissements.montant,
-      libelle: encaissements.libelle,
-      statut: encaissements.statut,
-      fiabilite: encaissements.fiabilite,
-    })
-    .from(encaissements);
-
-  const decRows = await db
-    .select({
-      id: decaissements.id,
-      projetId: decaissements.projetId,
-      date: decaissements.date,
-      montant: decaissements.montant,
-      libelle: decaissements.libelle,
-      statut: decaissements.statut,
-      prenom: freelances.prenom,
-      nom: freelances.nom,
-    })
-    .from(decaissements)
-    .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id));
+  const [liste, encRows, decRows, jalRows, clientsListe, freelancesActifs] = await Promise.all([
+    db
+      .select({
+        id: projets.id,
+        nom: projets.nom,
+        budget: projets.budget,
+        clientId: projets.clientId,
+        clientNom: clients.nom,
+        clientFiabilite: clients.fiabiliteDefaut,
+        fiabiliteDefaut: projets.fiabiliteDefaut,
+        actif: projets.actif,
+      })
+      .from(projets)
+      .innerJoin(clients, eq(projets.clientId, clients.id))
+      .where(eq(projets.actif, !archives))
+      .orderBy(projets.nom),
+    db
+      .select({
+        id: encaissements.id,
+        projetId: encaissements.projetId,
+        date: encaissements.date,
+        montant: encaissements.montant,
+        libelle: encaissements.libelle,
+        statut: encaissements.statut,
+        fiabilite: encaissements.fiabilite,
+      })
+      .from(encaissements),
+    db
+      .select({
+        id: decaissements.id,
+        projetId: decaissements.projetId,
+        date: decaissements.date,
+        montant: decaissements.montant,
+        libelle: decaissements.libelle,
+        statut: decaissements.statut,
+        prenom: freelances.prenom,
+        nom: freelances.nom,
+      })
+      .from(decaissements)
+      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id)),
+    db
+      .select({
+        id: jalons.id,
+        projetId: jalons.projetId,
+        date: jalons.date,
+        libelle: jalons.libelle,
+      })
+      .from(jalons),
+    db
+      .select({ id: clients.id, nom: clients.nom })
+      .from(clients)
+      .where(eq(clients.actif, true))
+      .orderBy(clients.nom),
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .where(eq(freelances.actif, true))
+      .orderBy(freelances.nom),
+  ]);
 
   const encParProjet = new Map<number, Evenement[]>();
   for (const e of encRows) {
@@ -101,32 +119,12 @@ export default async function PageProjets({
     decParProjet.set(d.projetId, arr);
   }
 
-  const jalRows = await db
-    .select({
-      id: jalons.id,
-      projetId: jalons.projetId,
-      date: jalons.date,
-      libelle: jalons.libelle,
-    })
-    .from(jalons);
   const jalParProjet = new Map<number, Jalon[]>();
   for (const j of jalRows) {
     const arr = jalParProjet.get(j.projetId) ?? [];
     arr.push({ id: j.id, date: j.date, libelle: j.libelle });
     jalParProjet.set(j.projetId, arr);
   }
-
-  // Listes pour les formulaires.
-  const clientsListe = await db
-    .select({ id: clients.id, nom: clients.nom })
-    .from(clients)
-    .where(eq(clients.actif, true))
-    .orderBy(clients.nom);
-  const freelancesActifs = await db
-    .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-    .from(freelances)
-    .where(eq(freelances.actif, true))
-    .orderBy(freelances.nom);
 
   return (
     <div className="space-y-6">

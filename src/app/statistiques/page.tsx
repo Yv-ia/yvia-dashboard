@@ -81,7 +81,7 @@ export default async function PageStatistiques({
   if (selMissions.length) conditions.push(inArray(affectations.missionId, selMissions));
 
   // Tous les jours posés de la période (et des filtres), avec leurs dimensions.
-  const rows = await db
+  const rowsPromise = db
     .select({
       date: affectations.date,
       tjmAchat: affectations.tjmAchat,
@@ -101,7 +101,7 @@ export default async function PageStatistiques({
     .where(and(...conditions));
 
   // Listes pour les filtres multi-sélection.
-  const [optFreelances, optClients, optMissions] = await Promise.all([
+  const optionsPromise = Promise.all([
     db
       .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
       .from(freelances)
@@ -120,8 +120,8 @@ export default async function PageStatistiques({
   const forfaitActif = selMissions.length === 0;
   type EncForfait = { date: string; montant: string; projetId: number; projetNom: string; clientId: number; clientNom: string };
   type DecForfait = EncForfait & { freelanceId: number; freelancePrenom: string; freelanceNom: string };
-  let encForfait: EncForfait[] = [];
-  let decForfait: DecForfait[] = [];
+  let encForfaitPromise: Promise<EncForfait[]> = Promise.resolve([]);
+  let decForfaitPromise: Promise<DecForfait[]> = Promise.resolve([]);
 
   if (forfaitActif) {
     if (selFreelances.length === 0) {
@@ -131,7 +131,7 @@ export default async function PageStatistiques({
         lte(encaissements.date, fin),
       ];
       if (selClients.length) condEnc.push(inArray(projets.clientId, selClients));
-      encForfait = await db
+      encForfaitPromise = db
         .select({
           date: encaissements.date,
           montant: encaissements.montant,
@@ -152,7 +152,7 @@ export default async function PageStatistiques({
     ];
     if (selClients.length) condDec.push(inArray(projets.clientId, selClients));
     if (selFreelances.length) condDec.push(inArray(decaissements.freelanceId, selFreelances));
-    decForfait = await db
+    decForfaitPromise = db
       .select({
         date: decaissements.date,
         montant: decaissements.montant,
@@ -170,6 +170,9 @@ export default async function PageStatistiques({
       .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
       .where(and(...condDec));
   }
+
+  const [rows, [optFreelances, optClients, optMissions], encForfait, decForfait] =
+    await Promise.all([rowsPromise, optionsPromise, encForfaitPromise, decForfaitPromise]);
 
   // Indicateurs globaux : régie (jours posés) + forfait (encaissements / décaissements).
   const caRegie = rows.reduce((s, r) => s + Number(r.tjmVente), 0);
