@@ -20,6 +20,7 @@ function Select({
   disabled,
   className,
   onValueChange,
+  triggerLabel,
 }: {
   options: SelectOption[];
   placeholder?: string;
@@ -31,6 +32,9 @@ function Select({
   disabled?: boolean;
   className?: string;
   onValueChange?: (value: string) => void;
+  // Si défini, le déclencheur affiche toujours ce texte (au lieu de la valeur
+  // sélectionnée). Utile pour un bouton « Regrouper par » fixe.
+  triggerLabel?: string;
 }) {
   const items = options.map((o) => ({ value: String(o.value), label: o.label }));
   const dv =
@@ -54,10 +58,14 @@ function Select({
           className
         )}
       >
-        <SelectPrimitive.Value
-          placeholder={placeholder}
-          className="truncate text-left data-[placeholder]:text-muted-foreground"
-        />
+        {triggerLabel ? (
+          <span className="truncate text-left">{triggerLabel}</span>
+        ) : (
+          <SelectPrimitive.Value
+            placeholder={placeholder}
+            className="truncate text-left data-[placeholder]:text-muted-foreground"
+          />
+        )}
         <SelectPrimitive.Icon className="shrink-0 text-muted-foreground">
           <ChevronDown className="size-4" />
         </SelectPrimitive.Icon>

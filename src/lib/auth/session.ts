@@ -5,15 +5,21 @@
 export const SESSION_COOKIE = "yvia_session";
 export const DUREE_SESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
 
-// pv = « password version » : ancre de révocation dérivée du hash du mot de passe
-// courant (cf. pvDepuisHash). Quand le mot de passe change, le hash change, donc
-// pv change : les jetons émis avant deviennent invalides côté getSession().
-export type Session = { userId: number; email: string; exp: number; pv: string };
+export type Role = "admin" | "user";
+
+// pv = « password version » : ancre de révocation dérivée du hash du mot de
+// passe courant. Quand le mot de passe change, les jetons émis avant deviennent
+// invalides côté getSession().
+export type Session = { userId: number; email: string; exp: number; pv: string; role: Role };
+
+export function estAdmin(session: Session | null | undefined): boolean {
+  return session?.role === "admin";
+}
 
 const TEXT = new TextEncoder();
 
 // Empreinte courte et stable du hash du mot de passe, embarquée dans le jeton.
-// Web Crypto uniquement, donc utilisable côté edge (middleware) comme côté Node.
+// Web Crypto uniquement, donc utilisable côté edge (proxy) comme côté Node.
 export async function pvDepuisHash(passwordHash: string): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", TEXT.encode(passwordHash));
   return b64urlFromBytes(new Uint8Array(digest)).slice(0, 16);
@@ -76,9 +82,9 @@ export async function verifierSession(token: string | undefined | null): Promise
     if (!ok) return null;
     const session = JSON.parse(stringFromB64url(payload)) as Session;
     if (typeof session.exp !== "number" || session.exp < Date.now()) return null;
-    // Jeton sans ancre de révocation (format antérieur) : on le rejette pour
-    // forcer une reconnexion plutôt que d'accepter un jeton non révocable.
+    if (typeof session.userId !== "number") return null;
     if (typeof session.pv !== "string" || session.pv === "") return null;
+    if (session.role !== "admin" && session.role !== "user") return null;
     return session;
   } catch {
     return null;

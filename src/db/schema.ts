@@ -18,7 +18,12 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
+  prenom: text("prenom"),
   nom: text("nom"), // nom affiché, optionnel
+  actif: boolean("actif").notNull().default(true),
+  // Rôle : 'admin' (peut inviter d'autres utilisateurs) ou 'user'. Par défaut
+  // 'admin' pour que les comptes associés existants conservent leurs droits.
+  role: text("role").notNull().default("admin"),
 });
 
 // --- INVITATIONS (lien d'invitation pour créer un compte associé) ---
@@ -28,9 +33,12 @@ export const invitations = pgTable("invitations", {
   id: serial("id").primaryKey(),
   token: text("token").notNull().unique(),
   email: text("email").notNull(),
+  prenom: text("prenom"),
   nom: text("nom"),
   expireLe: text("expire_le").notNull(), // date/heure ISO
   utilisee: boolean("utilisee").notNull().default(false),
+  // Rôle attribué au compte créé via cette invitation (par défaut 'user').
+  role: text("role").notNull().default("user"),
 });
 
 // --- FREELANCES ---

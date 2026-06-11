@@ -32,7 +32,11 @@ export function StatsExport({
     const a = document.createElement("a");
     a.href = url;
     a.download = "statistiques.csv";
+    // L'ancre doit être présente dans le DOM pour que .click() déclenche le
+    // téléchargement sur tous les navigateurs (Firefox/Safari notamment).
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   }
 

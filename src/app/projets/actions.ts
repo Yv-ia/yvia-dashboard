@@ -164,6 +164,15 @@ export async function ajouterDecaissement(formData: FormData): Promise<Resultat>
     return { ok: false, message: "Le montant doit être supérieur à 0." };
   }
 
+  const [p] = await db.select({ budget: projets.budget }).from(projets).where(eq(projets.id, projetId));
+  if (!p) return { ok: false, message: "Projet introuvable." };
+  if (Number(montant) > Number(p.budget)) {
+    return {
+      ok: false,
+      message: `Le montant dépasse le budget du projet (${formatEuro(Number(p.budget))}).`,
+    };
+  }
+
   await db.insert(decaissements).values({ projetId, freelanceId, date, montant, libelle, statut });
   rafraichir();
   return { ok: true };

@@ -1,8 +1,10 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { PERIODES, GROUPES } from "./stats-config";
 
 // Élément d'un contrôle segmenté (fond clair, l'actif ressort en blanc + ombre).
@@ -21,11 +23,15 @@ export function StatsFiltres({
   grouper,
   debut,
   fin,
+  children,
+  showGrouper = true,
 }: {
   periode: string;
   grouper: string;
-  debut: string; // "AAAA-MM" pour la plage personnalisée
-  fin: string; // "AAAA-MM"
+  debut: string; // "AAAA-MM-JJ" pour la plage personnalisée
+  fin: string; // "AAAA-MM-JJ"
+  children?: React.ReactNode; // emplacement de l'icône filtre, en bout de ligne
+  showGrouper?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -40,9 +46,8 @@ export function StatsFiltres({
 
   return (
     <div className="space-y-3">
-      {/* Période */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <span className="w-28 shrink-0 text-sm font-medium">Période</span>
+      {/* Une seule ligne : période (boutons) + regrouper (dropdown) + filtre */}
+      <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex flex-wrap gap-1 rounded-lg bg-secondary p-1">
           {PERIODES.map((x) => (
             <Link key={x.key} href={lienAvec({ periode: x.key })} className={seg(periode === x.key)}>
@@ -50,48 +55,45 @@ export function StatsFiltres({
             </Link>
           ))}
         </div>
+
+        {showGrouper ? (
+          <Select
+            value={grouper}
+            triggerLabel="Regrouper par"
+            onValueChange={(v) => router.push(lienAvec({ grouper: String(v) }))}
+            options={GROUPES.map((g) => ({ value: g.key, label: `Par ${g.label.toLowerCase()}` }))}
+            className="w-44"
+          />
+        ) : null}
+
+        {children}
       </div>
 
-      {/* Plage personnalisée (mois à mois) */}
+      {/* Plage personnalisée (date à date) */}
       {periode === "perso" ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <span className="hidden w-28 shrink-0 sm:block" />
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const fd = new FormData(e.currentTarget);
-              router.push(
-                lienAvec({
-                  periode: "perso",
-                  debut: String(fd.get("debut")),
-                  fin: String(fd.get("fin")),
-                })
-              );
-            }}
-            className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
-          >
-            <span>De</span>
-            <input type="month" name="debut" defaultValue={debut} className={inputCls} />
-            <span>à</span>
-            <input type="month" name="fin" defaultValue={fin} className={inputCls} />
-            <Button type="submit" size="sm">
-              Appliquer
-            </Button>
-          </form>
-        </div>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            const fd = new FormData(e.currentTarget);
+            router.push(
+              lienAvec({
+                periode: "perso",
+                debut: String(fd.get("debut")),
+                fin: String(fd.get("fin")),
+              })
+            );
+          }}
+          className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground"
+        >
+          <span>Du</span>
+          <input type="date" name="debut" defaultValue={debut} className={inputCls} />
+          <span>au</span>
+          <input type="date" name="fin" defaultValue={fin} className={inputCls} />
+          <Button type="submit" size="sm">
+            Appliquer
+          </Button>
+        </form>
       ) : null}
-
-      {/* Regrouper par */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-        <span className="w-28 shrink-0 text-sm font-medium">Regrouper par</span>
-        <div className="inline-flex flex-wrap gap-1 rounded-lg bg-secondary p-1">
-          {GROUPES.map((x) => (
-            <Link key={x.key} href={lienAvec({ grouper: x.key })} className={seg(grouper === x.key)}>
-              {x.label}
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

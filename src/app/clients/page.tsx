@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
-import { clients, missions, freelances, affectations } from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { clients } from "@/db/schema";
+import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,12 +20,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
-import { SousOnglets, ONGLETS_ANNUAIRE } from "@/app/sous-onglets";
+import { EntityLink } from "@/app/_drawer/drawer-stack";
 import { ClientFormDialog } from "./client-form-dialog";
-import { ClientDetailDialog } from "./client-detail-dialog";
-import { ArchiveClientButton } from "./archive-client-button";
-import { creerClient, modifierClient } from "./actions";
+import { creerClient } from "./actions";
 
 export default async function PageClients({
   searchParams,
@@ -43,65 +40,9 @@ export default async function PageClients({
     .where(eq(clients.actif, !archives))
     .orderBy(clients.nom);
 
-  // Missions par client (freelance + TJM vente) pour la fiche détaillée.
-  const missionsRows = await db
-    .select({
-      clientId: missions.clientId,
-      missionNom: missions.nom,
-      freelanceNom: freelances.nom,
-      freelancePrenom: freelances.prenom,
-      tjmVente: missions.tjmVente,
-      actif: missions.actif,
-    })
-    .from(missions)
-    .innerJoin(freelances, eq(missions.freelanceId, freelances.id));
-
-  type MissionFiche = {
-    missionNom: string;
-    freelanceNom: string;
-    tjmVente: string;
-    actif: boolean;
-  };
-  const missionsParClient = new Map<number, MissionFiche[]>();
-  for (const m of missionsRows) {
-    const arr = missionsParClient.get(m.clientId) ?? [];
-    arr.push({
-      missionNom: m.missionNom,
-      freelanceNom: `${m.freelancePrenom} ${m.freelanceNom}`,
-      tjmVente: m.tjmVente,
-      actif: m.actif,
-    });
-    missionsParClient.set(m.clientId, arr);
-  }
-
-  // Stats du mois courant par client : jours facturés + CA.
-  const maintenant = new Date();
-  const annee = maintenant.getUTCFullYear();
-  const mois = maintenant.getUTCMonth() + 1;
-  const affsMois = await db
-    .select({ clientId: missions.clientId, tjmVente: affectations.tjmVente })
-    .from(affectations)
-    .innerJoin(missions, eq(affectations.missionId, missions.id))
-    .where(
-      and(
-        gte(affectations.date, premierJourDuMois(annee, mois)),
-        lte(affectations.date, dernierJourDuMois(annee, mois))
-      )
-    );
-
-  const statsParClient = new Map<number, { jours: number; ca: number }>();
-  for (const a of affsMois) {
-    const s = statsParClient.get(a.clientId) ?? { jours: 0, ca: 0 };
-    s.jours += 1;
-    s.ca += Number(a.tjmVente);
-    statsParClient.set(a.clientId, s);
-  }
-
   return (
     <div className="space-y-6">
-      <SousOnglets onglets={ONGLETS_ANNUAIRE} />
-      <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl">Clients</h1>
+      <div className="flex items-center justify-end">
         <ClientFormDialog
           action={creerClient}
           titre="Nouveau client"
@@ -109,7 +50,6 @@ export default async function PageClients({
         />
       </div>
 
-      {/* Onglets Actifs / Archives */}
       <div className="flex gap-1">
         <Link
           href="/clients"
@@ -148,33 +88,15 @@ export default async function PageClients({
               <TableHeader>
                 <TableRow>
                   <TableHead>Société</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {liste.map((client) => (
                   <TableRow key={client.id}>
                     <TableCell>
-                      <ClientDetailDialog
-                        nom={client.nom}
-                        missions={missionsParClient.get(client.id) ?? []}
-                        stats={statsParClient.get(client.id) ?? { jours: 0, ca: 0 }}
-                      />
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <ClientFormDialog
-                          action={modifierClient}
-                          client={client}
-                          titre="Modifier le client"
-                          trigger={
-                            <Button variant="outline" size="sm">
-                              Modifier
-                            </Button>
-                          }
-                        />
-                        <ArchiveClientButton id={client.id} actif={client.actif} />
-                      </div>
+                      <EntityLink type="client" id={client.id}>
+                        {client.nom}
+                      </EntityLink>
                     </TableCell>
                   </TableRow>
                 ))}

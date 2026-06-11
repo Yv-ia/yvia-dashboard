@@ -11,10 +11,12 @@ import { accepterInvitation } from "./actions";
 export function AccepterForm({
   token,
   email,
+  prenom,
   nom,
 }: {
   token: string;
   email: string;
+  prenom: string;
   nom: string;
 }) {
   const [enCours, setEnCours] = useState(false);
@@ -36,9 +38,15 @@ export function AccepterForm({
           <Label htmlFor="email">Email</Label>
           <Input id="email" value={email} disabled />
         </div>
-        <div className="space-y-2">
-          <Label htmlFor="nom">Nom</Label>
-          <Input id="nom" name="nom" defaultValue={nom} />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="prenom">Prénom</Label>
+            <Input id="prenom" name="prenom" defaultValue={prenom} />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="nom">Nom</Label>
+            <Input id="nom" name="nom" defaultValue={nom} />
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="motDePasse">Mot de passe (8 caractères min.)</Label>
@@ -69,9 +77,15 @@ function SqueletteInvitation() {
         <Label>Email</Label>
         <ChampFactice />
       </div>
-      <div className="space-y-2">
-        <Label>Nom</Label>
-        <ChampFactice />
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label>Prénom</Label>
+          <ChampFactice />
+        </div>
+        <div className="space-y-2">
+          <Label>Nom</Label>
+          <ChampFactice />
+        </div>
       </div>
       <div className="space-y-2">
         <Label>Mot de passe (8 caractères min.)</Label>

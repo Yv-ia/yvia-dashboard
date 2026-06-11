@@ -17,12 +17,18 @@ export async function getSession(): Promise<Session | null> {
   // courant. S'ils divergent (mot de passe changé, compte recréé) ou si le
   // compte n'existe plus, le jeton est considéré comme révoqué.
   const [u] = await db
-    .select({ passwordHash: users.passwordHash })
+    .select({ id: users.id, email: users.email, passwordHash: users.passwordHash, role: users.role })
     .from(users)
     .where(eq(users.id, session.userId));
   if (!u || (await pvDepuisHash(u.passwordHash)) !== session.pv) return null;
 
-  return session;
+  return {
+    userId: u.id,
+    email: u.email,
+    exp: session.exp,
+    pv: session.pv,
+    role: u.role === "user" ? "user" : "admin",
+  };
 }
 
 // À appeler en tête des pages protégées : renvoie la session ou redirige vers

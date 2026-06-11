@@ -7,6 +7,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { verifierMotDePasse } from "@/lib/auth/password";
 import { signerSession, pvDepuisHash, SESSION_COOKIE, DUREE_SESSION_MS } from "@/lib/auth/session";
+import { reinitialiserLimite, verifierLimite } from "@/lib/auth/rate-limit";
 
 export type Resultat = { ok: boolean; message?: string };
 
@@ -17,6 +18,9 @@ export async function connexion(formData: FormData): Promise<Resultat> {
     return { ok: false, message: "Email et mot de passe requis." };
   }
 
+  const limite = await verifierLimite("login", email, 5, 10 * 60 * 1000);
+  if (!limite.ok) return limite;
+
   const [u] = await db.select().from(users).where(eq(users.email, email));
   // Message volontairement générique (on ne révèle pas si l'email existe).
   if (!u || !verifierMotDePasse(motDePasse, u.passwordHash)) {
@@ -25,7 +29,9 @@ export async function connexion(formData: FormData): Promise<Resultat> {
 
   const exp = Date.now() + DUREE_SESSION_MS;
   const pv = await pvDepuisHash(u.passwordHash);
-  const token = await signerSession({ userId: u.id, email: u.email, exp, pv });
+  const role = u.role === "user" ? "user" : "admin";
+  const token = await signerSession({ userId: u.id, email: u.email, exp, pv, role });
+  await reinitialiserLimite("login", email);
   (await cookies()).set(SESSION_COOKIE, token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

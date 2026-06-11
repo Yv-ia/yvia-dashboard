@@ -23,7 +23,12 @@ export default async function PageInvitation({
         </CardHeader>
         <CardContent>
           {valide ? (
-            <AccepterForm token={token} email={inv.email} nom={inv.nom ?? ""} />
+            <AccepterForm
+              token={token}
+              email={inv.email}
+              prenom={inv.prenom ?? ""}
+              nom={inv.nom ?? ""}
+            />
           ) : (
             <p className="text-sm text-muted-foreground">
               Ce lien d&apos;invitation est invalide, expiré ou déjà utilisé. Demandez un nouveau lien à

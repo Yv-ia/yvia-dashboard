@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { db } from "@/db";
-import { exigerSession } from "@/lib/auth/server";
 import {
   affectations,
   missions,
@@ -12,52 +11,32 @@ import {
 } from "@/db/schema";
 import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
 import { StatsFiltres } from "./stats-filtres";
 import { PERIODES, GROUPES } from "./stats-config";
 import { StatsTable, type LigneStat } from "./stats-table";
 import { StatsExport } from "./stats-export";
-import { MultiSelectFiltre } from "./multi-select-filtre";
-import { SousOnglets, ONGLETS_FINANCES } from "@/app/sous-onglets";
+import { StatsFiltreDrawer } from "./stats-filtre-drawer";
+import { exigerSession } from "@/lib/auth/server";
 
 const arrondi = (n: number) => Math.round(n * 100) / 100;
 
+const isoJour = (d: Date) => d.toISOString().slice(0, 10);
+
 // Bornes [debut, fin] (texte "AAAA-MM-JJ") selon la période choisie.
+// Les périodes prédéfinies sont des fenêtres glissantes en jours se terminant
+// aujourd'hui ; "perso" utilise une plage de dates explicite.
 function bornesPeriode(
   periode: string,
-  debutMois: string,
-  finMois: string,
-  annee: number,
-  mois: number
+  debutPerso: string,
+  finPerso: string
 ): { debut: string; fin: string } {
-  switch (periode) {
-    case "mois":
-      return { debut: premierJourDuMois(annee, mois), fin: dernierJourDuMois(annee, mois) };
-    case "trimestre": {
-      const q = Math.floor((mois - 1) / 3);
-      return {
-        debut: premierJourDuMois(annee, q * 3 + 1),
-        fin: dernierJourDuMois(annee, q * 3 + 3),
-      };
-    }
-    case "12mois": {
-      const total = mois + 11;
-      const aFin = annee + Math.floor((total - 1) / 12);
-      const mFin = ((total - 1) % 12) + 1;
-      return { debut: premierJourDuMois(annee, mois), fin: dernierJourDuMois(aFin, mFin) };
-    }
-    case "debut":
-      return { debut: "2026-06-01", fin: "2999-12-31" };
-    case "perso": {
-      const [da, dm] = debutMois.split("-").map(Number);
-      const [fa, fm] = finMois.split("-").map(Number);
-      return { debut: premierJourDuMois(da, dm), fin: dernierJourDuMois(fa, fm) };
-    }
-    case "annee":
-    default:
-      return { debut: `${annee}-01-01`, fin: `${annee}-12-31` };
-  }
+  if (periode === "perso") return { debut: debutPerso, fin: finPerso };
+  const n = Number(periode) || 90;
+  const fin = new Date();
+  const debut = new Date(fin);
+  debut.setUTCDate(debut.getUTCDate() - (n - 1));
+  return { debut: isoJour(debut), fin: isoJour(fin) };
 }
 
 export default async function PageStatistiques({
@@ -74,17 +53,17 @@ export default async function PageStatistiques({
   }>;
 }) {
   await exigerSession();
+
   const params = await searchParams;
   const maintenant = new Date();
-  const annee = maintenant.getUTCFullYear();
-  const mois = maintenant.getUTCMonth() + 1;
+  const aujourd = isoJour(maintenant);
 
-  const periode = PERIODES.some((p) => p.key === params.periode) ? params.periode! : "annee";
+  const periode = PERIODES.some((p) => p.key === params.periode) ? params.periode! : "90";
   const grouper = GROUPES.some((g) => g.key === params.grouper) ? params.grouper! : "mois";
-  const debutMois = params.debut || `${annee}-01`;
-  const finMois = params.fin || `${annee}-12`;
+  const debutPerso = params.debut || aujourd;
+  const finPerso = params.fin || aujourd;
 
-  const { debut, fin } = bornesPeriode(periode, debutMois, finMois, annee, mois);
+  const { debut, fin } = bornesPeriode(periode, debutPerso, finPerso);
 
   // Filtres optionnels (ids séparés par des virgules dans l'URL).
   const ids = (v?: string) =>
@@ -286,47 +265,24 @@ export default async function PageStatistiques({
 
   return (
     <div className="space-y-6">
-      <SousOnglets onglets={ONGLETS_FINANCES} />
-      <h1 className="font-display text-3xl">Statistiques</h1>
-
-      <Card>
-        <CardContent className="space-y-3 pt-6">
-          <Suspense>
-            <StatsFiltres periode={periode} grouper={grouper} debut={debutMois} fin={finMois} />
-          </Suspense>
-          <div className="flex flex-col gap-2 border-t border-border pt-3 sm:flex-row sm:items-center">
-            <span className="w-28 shrink-0 text-sm font-medium">Filtrer</span>
-            <div className="flex flex-wrap gap-2">
-              <Suspense>
-                <MultiSelectFiltre
-                  label="Freelances"
-                  paramName="freelances"
-                  selected={selFreelances.map(String)}
-                  options={optFreelances.map((f) => ({
-                    value: String(f.id),
-                    label: `${f.prenom} ${f.nom}`,
-                  }))}
-                />
-                <MultiSelectFiltre
-                  label="Clients"
-                  paramName="clients"
-                  selected={selClients.map(String)}
-                  options={optClients.map((c) => ({ value: String(c.id), label: c.nom }))}
-                />
-                <MultiSelectFiltre
-                  label="Missions"
-                  paramName="missions"
-                  selected={selMissions.map(String)}
-                  options={optMissions.map((m) => ({
-                    value: String(m.id),
-                    label: `${m.nom} (${m.clientNom})`,
-                  }))}
-                />
-              </Suspense>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <Suspense>
+        <StatsFiltres periode={periode} grouper={grouper} debut={debutPerso} fin={finPerso}>
+          <StatsFiltreDrawer
+            clients={optClients.map((c) => ({ value: String(c.id), label: c.nom }))}
+            freelances={optFreelances.map((f) => ({
+              value: String(f.id),
+              label: `${f.prenom} ${f.nom}`,
+            }))}
+            missions={optMissions.map((m) => ({
+              value: String(m.id),
+              label: `${m.nom} (${m.clientNom})`,
+            }))}
+            selClients={selClients.map(String)}
+            selFreelances={selFreelances.map(String)}
+            selMissions={selMissions.map(String)}
+          />
+        </StatsFiltres>
+      </Suspense>
 
       {/* Indicateurs de la période */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">

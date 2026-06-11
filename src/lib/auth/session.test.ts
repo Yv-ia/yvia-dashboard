@@ -8,7 +8,7 @@ beforeAll(() => {
 });
 
 function sessionDeBase(): Session {
-  return { userId: 1, email: "a@yvia.io", exp: Date.now() + 60_000, pv: "ancre" };
+  return { userId: 1, email: "a@yvia.io", exp: Date.now() + 60_000, pv: "ancre", role: "admin" };
 }
 
 describe("signerSession / verifierSession", () => {
@@ -31,7 +31,12 @@ describe("signerSession / verifierSession", () => {
 
   it("rejette un ancien jeton sans ancre de révocation (pv)", async () => {
     // Signé avec la vraie clé mais sans champ pv : signature valide, pv manquant.
-    const sansPv = { userId: 1, email: "a@yvia.io", exp: Date.now() + 60_000 } as Session;
+    const sansPv = {
+      userId: 1,
+      email: "a@yvia.io",
+      exp: Date.now() + 60_000,
+      role: "admin",
+    } as unknown as Session;
     expect(await verifierSession(await signerSession(sansPv))).toBeNull();
   });
 });
