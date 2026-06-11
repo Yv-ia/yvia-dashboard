@@ -11,7 +11,14 @@ vi.mock("next/headers", () => ({
 
 const { etatDb } = vi.hoisted(() => ({
   etatDb: {
-    rows: [] as Array<{ id: number; email: string; passwordHash: string; role: "admin" | "user" }>,
+    rows: [] as Array<{
+      id: number;
+      email: string;
+      passwordHash: string;
+      role: "admin" | "user";
+      prenom: string | null;
+      nom: string | null;
+    }>,
   },
 }));
 vi.mock("@/db", () => ({
@@ -38,13 +45,30 @@ describe("getSession : révocation par changement de mot de passe", () => {
   it("renvoie la session quand le pv correspond au hash courant", async () => {
     const hash = "hash-courant";
     cookieGet.mockReturnValue({ value: await jetonPour(hash) });
-    etatDb.rows = [{ id: 1, email: "a@yvia.io", passwordHash: hash, role: "admin" }];
-    expect(await getSession()).toMatchObject({ userId: 1, email: "a@yvia.io", role: "admin" });
+    etatDb.rows = [
+      { id: 1, email: "a@yvia.io", passwordHash: hash, role: "admin", prenom: "Ada", nom: "Lovelace" },
+    ];
+    expect(await getSession()).toMatchObject({
+      userId: 1,
+      email: "a@yvia.io",
+      role: "admin",
+      prenom: "Ada",
+      nom: "Lovelace",
+    });
   });
 
   it("révoque la session quand le mot de passe a changé (pv obsolète)", async () => {
     cookieGet.mockReturnValue({ value: await jetonPour("ancien-hash") });
-    etatDb.rows = [{ id: 1, email: "a@yvia.io", passwordHash: "nouveau-hash", role: "admin" }];
+    etatDb.rows = [
+      {
+        id: 1,
+        email: "a@yvia.io",
+        passwordHash: "nouveau-hash",
+        role: "admin",
+        prenom: "Ada",
+        nom: "Lovelace",
+      },
+    ];
     expect(await getSession()).toBeNull();
   });
 

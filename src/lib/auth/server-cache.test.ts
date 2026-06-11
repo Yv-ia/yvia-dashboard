@@ -3,7 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 const { cookieGet, etatDb, appelsSelect } = vi.hoisted(() => ({
   cookieGet: vi.fn(),
   etatDb: {
-    rows: [] as Array<{ id: number; email: string; passwordHash: string; role: "admin" | "user" }>,
+    rows: [] as Array<{
+      id: number;
+      email: string;
+      passwordHash: string;
+      role: "admin" | "user";
+      prenom: string | null;
+      nom: string | null;
+    }>,
   },
   appelsSelect: { count: 0 },
 }));
@@ -45,12 +52,14 @@ describe("getSession : cache de rendu", () => {
     process.env.SESSION_SECRET = "secret-de-test-uniquement";
     const passwordHash = "hash-courant";
     cookieGet.mockReturnValue({ value: await jetonPour(passwordHash) });
-    etatDb.rows = [{ id: 1, email: "a@yvia.io", passwordHash, role: "admin" }];
+    etatDb.rows = [
+      { id: 1, email: "a@yvia.io", passwordHash, role: "admin", prenom: "Ada", nom: "Lovelace" },
+    ];
 
     const [premiere, seconde] = await Promise.all([getSession(), getSession()]);
 
-    expect(premiere).toMatchObject({ userId: 1, email: "a@yvia.io", role: "admin" });
-    expect(seconde).toMatchObject({ userId: 1, email: "a@yvia.io", role: "admin" });
+    expect(premiere).toMatchObject({ userId: 1, email: "a@yvia.io", role: "admin", prenom: "Ada", nom: "Lovelace" });
+    expect(seconde).toMatchObject({ userId: 1, email: "a@yvia.io", role: "admin", prenom: "Ada", nom: "Lovelace" });
     expect(appelsSelect.count).toBe(1);
   });
 });

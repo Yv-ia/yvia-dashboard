@@ -7,9 +7,6 @@ import { Sidebar } from "./sidebar";
 import { DrawerProvider } from "./_drawer/drawer-stack";
 import { estAdmin } from "@/lib/auth/session";
 import { getSession } from "@/lib/auth/server";
-import { db } from "@/db";
-import { users } from "@/db/schema";
-import { eq } from "drizzle-orm";
 
 export const metadata: Metadata = {
   title: "Yvia - Dashboard",
@@ -23,14 +20,7 @@ export default async function RootLayout({
 }>) {
   // En-tête (logo + navigation + déconnexion) affiché uniquement si connecté.
   const session = await getSession();
-  const [utilisateur] = session
-    ? await db
-        .select({ prenom: users.prenom, nom: users.nom })
-        .from(users)
-        .where(eq(users.id, session.userId))
-    : [];
-  const nomAffiche =
-    [utilisateur?.prenom, utilisateur?.nom].filter(Boolean).join(" ") || session?.email || "";
+  const nomAffiche = [session?.prenom, session?.nom].filter(Boolean).join(" ") || session?.email || "";
 
   return (
     <html lang="fr" className="h-full">

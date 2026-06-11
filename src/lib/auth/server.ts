@@ -9,7 +9,9 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { verifierSession, pvDepuisHash, SESSION_COOKIE, type Session } from "./session";
 
-export const getSession = cache(async function getSession(): Promise<Session | null> {
+export type SessionServeur = Session & { prenom: string | null; nom: string | null };
+
+export const getSession = cache(async function getSession(): Promise<SessionServeur | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   const session = await verifierSession(token);
   if (!session) return null;
@@ -18,7 +20,14 @@ export const getSession = cache(async function getSession(): Promise<Session | n
   // courant. S'ils divergent (mot de passe changé, compte recréé) ou si le
   // compte n'existe plus, le jeton est considéré comme révoqué.
   const [u] = await db
-    .select({ id: users.id, email: users.email, passwordHash: users.passwordHash, role: users.role })
+    .select({
+      id: users.id,
+      email: users.email,
+      passwordHash: users.passwordHash,
+      role: users.role,
+      prenom: users.prenom,
+      nom: users.nom,
+    })
     .from(users)
     .where(eq(users.id, session.userId));
   if (!u || (await pvDepuisHash(u.passwordHash)) !== session.pv) return null;
@@ -29,13 +38,15 @@ export const getSession = cache(async function getSession(): Promise<Session | n
     exp: session.exp,
     pv: session.pv,
     role: u.role === "user" ? "user" : "admin",
+    prenom: u.prenom,
+    nom: u.nom,
   };
 });
 
 // À appeler en tête des pages protégées : renvoie la session ou redirige vers
 // /login. Centralise le contrôle d'accès des Server Components qui lisent des
 // données (le proxy ne fait qu'un filtrage optimiste, sans accès base).
-export async function exigerSession(): Promise<Session> {
+export async function exigerSession(): Promise<SessionServeur> {
   const session = await getSession();
   if (!session) redirect("/login");
   return session;

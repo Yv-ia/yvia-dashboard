@@ -89,95 +89,98 @@ export default async function PagePlanning({
   }
 
   // Données.
-  const freelancesActifs = await db
-    .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-    .from(freelances)
-    .where(eq(freelances.actif, true))
-    .orderBy(freelances.nom);
-
-  const missionsDispo = await db
-    .select({
-      id: missions.id,
-      nom: missions.nom,
-      freelanceId: missions.freelanceId,
-      clientNom: clients.nom,
-    })
-    .from(missions)
-    .innerJoin(clients, eq(missions.clientId, clients.id))
-    .where(eq(missions.actif, true));
-
-  const affs = await db
-    .select({
-      freelanceId: affectations.freelanceId,
-      date: affectations.date,
-      missionId: affectations.missionId,
-      missionNom: missions.nom,
-      tjmAchat: affectations.tjmAchat,
-      tjmVente: affectations.tjmVente,
-      clientNom: clients.nom,
-      prenom: freelances.prenom,
-      nom: freelances.nom,
-    })
-    .from(affectations)
-    .innerJoin(missions, eq(affectations.missionId, missions.id))
-    .innerJoin(clients, eq(missions.clientId, clients.id))
-    .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
-    .where(and(gte(affectations.date, debutMois), lte(affectations.date, finMois)));
-
-  // --- Projets (forfait) : lignes du calendrier + flux du mois ---
-  const projetsActifs = await db
-    .select({ id: projets.id, nom: projets.nom, clientNom: clients.nom, budget: projets.budget })
-    .from(projets)
-    .innerJoin(clients, eq(projets.clientId, clients.id))
-    .where(eq(projets.actif, true))
-    .orderBy(projets.nom);
-
-  const encMois = await db
-    .select({
-      id: encaissements.id,
-      projetId: encaissements.projetId,
-      date: encaissements.date,
-      montant: encaissements.montant,
-      libelle: encaissements.libelle,
-    })
-    .from(encaissements)
-    .where(
-      and(
-        eq(encaissements.statut, "encaisse"), // réalisé uniquement (le prévu ne compte pas comme CA)
-        gte(encaissements.date, debutMois),
-        lte(encaissements.date, finMois)
-      )
-    );
-
-  const decMois = await db
-    .select({
-      id: decaissements.id,
-      projetId: decaissements.projetId,
-      date: decaissements.date,
-      montant: decaissements.montant,
-      libelle: decaissements.libelle,
-      prenom: freelances.prenom,
-      nom: freelances.nom,
-    })
-    .from(decaissements)
-    .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
-    .where(
-      and(
-        eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
-        gte(decaissements.date, debutMois),
-        lte(decaissements.date, finMois)
-      )
-    );
-
-  const jalMois = await db
-    .select({
-      id: jalons.id,
-      projetId: jalons.projetId,
-      date: jalons.date,
-      libelle: jalons.libelle,
-    })
-    .from(jalons)
-    .where(and(gte(jalons.date, debutMois), lte(jalons.date, finMois)));
+  const [
+    freelancesActifs,
+    missionsDispo,
+    affs,
+    projetsActifs,
+    encMois,
+    decMois,
+    jalMois,
+  ] = await Promise.all([
+    db
+      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+      .from(freelances)
+      .where(eq(freelances.actif, true))
+      .orderBy(freelances.nom),
+    db
+      .select({
+        id: missions.id,
+        nom: missions.nom,
+        freelanceId: missions.freelanceId,
+        clientNom: clients.nom,
+      })
+      .from(missions)
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .where(eq(missions.actif, true)),
+    db
+      .select({
+        freelanceId: affectations.freelanceId,
+        date: affectations.date,
+        missionId: affectations.missionId,
+        missionNom: missions.nom,
+        tjmAchat: affectations.tjmAchat,
+        tjmVente: affectations.tjmVente,
+        clientNom: clients.nom,
+        prenom: freelances.prenom,
+        nom: freelances.nom,
+      })
+      .from(affectations)
+      .innerJoin(missions, eq(affectations.missionId, missions.id))
+      .innerJoin(clients, eq(missions.clientId, clients.id))
+      .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
+      .where(and(gte(affectations.date, debutMois), lte(affectations.date, finMois))),
+    db
+      .select({ id: projets.id, nom: projets.nom, clientNom: clients.nom, budget: projets.budget })
+      .from(projets)
+      .innerJoin(clients, eq(projets.clientId, clients.id))
+      .where(eq(projets.actif, true))
+      .orderBy(projets.nom),
+    db
+      .select({
+        id: encaissements.id,
+        projetId: encaissements.projetId,
+        date: encaissements.date,
+        montant: encaissements.montant,
+        libelle: encaissements.libelle,
+      })
+      .from(encaissements)
+      .where(
+        and(
+          eq(encaissements.statut, "encaisse"), // réalisé uniquement (le prévu ne compte pas comme CA)
+          gte(encaissements.date, debutMois),
+          lte(encaissements.date, finMois)
+        )
+      ),
+    db
+      .select({
+        id: decaissements.id,
+        projetId: decaissements.projetId,
+        date: decaissements.date,
+        montant: decaissements.montant,
+        libelle: decaissements.libelle,
+        prenom: freelances.prenom,
+        nom: freelances.nom,
+      })
+      .from(decaissements)
+      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
+      .where(
+        and(
+          eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
+          gte(decaissements.date, debutMois),
+          lte(decaissements.date, finMois)
+        )
+      ),
+    db
+      .select({
+        id: jalons.id,
+        projetId: jalons.projetId,
+        date: jalons.date,
+        libelle: jalons.libelle,
+      })
+      .from(jalons)
+      .where(and(gte(jalons.date, debutMois), lte(jalons.date, finMois))),
+  ]);
 
   // Événements regroupés par projet puis par date.
   type EvenementProjet = {
