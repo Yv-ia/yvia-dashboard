@@ -9,7 +9,7 @@ import {
   encaissements,
   decaissements,
 } from "@/db/schema";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
 import { StatsFiltres } from "./stats-filtres";
@@ -127,6 +127,8 @@ export default async function PageStatistiques({
     if (selFreelances.length === 0) {
       const condEnc = [
         eq(encaissements.statut, "encaisse"), // réalisé uniquement (les stats restent factuelles)
+        eq(projets.actif, true),
+        ne(projets.statutCommercial, "perdu"),
         gte(encaissements.date, debut),
         lte(encaissements.date, fin),
       ];
@@ -147,6 +149,8 @@ export default async function PageStatistiques({
     }
     const condDec = [
       eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
+      eq(projets.actif, true),
+      ne(projets.statutCommercial, "perdu"),
       gte(decaissements.date, debut),
       lte(decaissements.date, fin),
     ];

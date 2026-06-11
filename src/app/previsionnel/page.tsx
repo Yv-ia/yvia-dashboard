@@ -9,7 +9,7 @@ import {
   encaissements,
   decaissements,
 } from "@/db/schema";
-import { and, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -91,7 +91,12 @@ export default async function PagePrevisionnel({
   let encsPromise: Promise<EncPrevisionnel[]> = Promise.resolve([]);
   let decsPromise: Promise<DecPrevisionnel[]> = Promise.resolve([]);
   if (forfaitActif) {
-    const condEnc = [gte(encaissements.date, debut), lte(encaissements.date, fin)];
+    const condEnc = [
+      eq(projets.actif, true),
+      ne(projets.statutCommercial, "perdu"),
+      gte(encaissements.date, debut),
+      lte(encaissements.date, fin),
+    ];
     if (selClients.length) condEnc.push(inArray(projets.clientId, selClients));
     // Les encaissements n'ont pas de freelance : exclus si un filtre freelance est posé.
     if (selFreelances.length === 0) {
@@ -106,7 +111,12 @@ export default async function PagePrevisionnel({
         .innerJoin(projets, eq(encaissements.projetId, projets.id))
         .where(and(...condEnc));
     }
-    const condDec = [gte(decaissements.date, debut), lte(decaissements.date, fin)];
+    const condDec = [
+      eq(projets.actif, true),
+      ne(projets.statutCommercial, "perdu"),
+      gte(decaissements.date, debut),
+      lte(decaissements.date, fin),
+    ];
     if (selClients.length) condDec.push(inArray(projets.clientId, selClients));
     if (selFreelances.length) condDec.push(inArray(decaissements.freelanceId, selFreelances));
     decsPromise = db
