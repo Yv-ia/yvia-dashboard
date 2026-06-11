@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { db } from "@/db";
 import {
   affectations,
@@ -9,7 +8,7 @@ import {
   encaissements,
   decaissements,
 } from "@/db/schema";
-import { and, eq, gte, inArray, lte, ne } from "drizzle-orm";
+import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Table,
@@ -22,54 +21,28 @@ import {
 } from "@/components/ui/table";
 import { formatEuro, formatPourcent, formatMois } from "@/lib/format";
 import { premierJourDuMois } from "@/lib/calculs/jours-ouvres";
-import { StatsFiltres } from "./stats-filtres";
-import { PERIODES } from "./stats-config";
-import { StatsFiltreDrawer } from "./stats-filtre-drawer";
 import { exigerSession } from "@/lib/auth/server";
 import {
   calculerPilotageMensuel,
-  type DecaissementPilotage,
-  type EncaissementPilotage,
   type LignePrevisionnel,
   type LigneRealise,
 } from "./pilotage-calculs";
 import { TableauPrevisionnel } from "./tableau-previsionnel";
 
-type DecaissementPrevuRow = DecaissementPilotage & {
-  projetNom: string;
-  clientNom: string;
-  freelancePrenom: string;
-  freelanceNomDb: string;
-  libelle: string | null;
-};
-
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const isoJour = (d: Date) => d.toISOString().slice(0, 10);
 
-function bornesPilotage(
-  periode: string,
-  debutPerso: string,
-  finPerso: string,
-  maintenant: Date
-) {
+// Fenêtre fixe de 365 jours : réalisé sur l'année glissante, prévisionnel du
+// début du mois courant jusqu'à +365 jours.
+function bornesPilotage(maintenant: Date) {
   const annee = maintenant.getUTCFullYear();
   const mois = maintenant.getUTCMonth() + 1;
   const debutMoisCourant = premierJourDuMois(annee, mois);
 
-  if (periode === "perso") {
-    return {
-      debutRealise: debutPerso,
-      finRealise: finPerso,
-      debutPrevisionnel: debutMoisCourant,
-      finPrevisionnel: finPerso,
-    };
-  }
-
-  const n = Number(periode) || 365;
   const debutRealise = new Date(maintenant);
-  debutRealise.setUTCDate(debutRealise.getUTCDate() - (n - 1));
+  debutRealise.setUTCDate(debutRealise.getUTCDate() - 364);
   const finPrevisionnel = new Date(maintenant);
-  finPrevisionnel.setUTCDate(finPrevisionnel.getUTCDate() + n);
+  finPrevisionnel.setUTCDate(finPrevisionnel.getUTCDate() + 365);
 
   return {
     debutRealise: isoJour(debutRealise),
@@ -79,64 +52,15 @@ function bornesPilotage(
   };
 }
 
-function ids(v?: string) {
-  return (v ?? "")
-    .split(",")
-    .map((x) => Number(x))
-    .filter((n) => Number.isFinite(n) && n > 0);
-}
-
-export default async function PageStatistiques({
-  searchParams,
-}: {
-  searchParams: Promise<{
-    periode?: string;
-    debut?: string;
-    fin?: string;
-    freelances?: string;
-    clients?: string;
-    missions?: string;
-  }>;
-}) {
+export default async function PageStatistiques() {
   await exigerSession();
 
-  const params = await searchParams;
   const maintenant = new Date();
-  const aujourd = isoJour(maintenant);
   const moisCourant = `${maintenant.getUTCFullYear()}-${pad2(maintenant.getUTCMonth() + 1)}`;
 
-  const periode = PERIODES.some((p) => p.key === params.periode) ? params.periode! : "365";
-  const debutPerso = params.debut || aujourd;
-  const finPerso = params.fin || aujourd;
-  const { debutRealise, finRealise, debutPrevisionnel, finPrevisionnel } = bornesPilotage(
-    periode,
-    debutPerso,
-    finPerso,
-    maintenant
-  );
+  const { debutRealise, finRealise, debutPrevisionnel, finPrevisionnel } =
+    bornesPilotage(maintenant);
 
-  const selFreelances = ids(params.freelances);
-  const selClients = ids(params.clients);
-  const selMissions = ids(params.missions);
-  const forfaitActif = selMissions.length === 0;
-
-  const optionsPromise = Promise.all([
-    db
-      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-      .from(freelances)
-      .orderBy(freelances.nom),
-    db.select({ id: clients.id, nom: clients.nom }).from(clients).orderBy(clients.nom),
-    db
-      .select({ id: missions.id, nom: missions.nom, clientNom: clients.nom })
-      .from(missions)
-      .innerJoin(clients, eq(missions.clientId, clients.id))
-      .orderBy(missions.nom),
-  ]);
-
-  const condRegie = [gte(affectations.date, debutPrevisionnel), lte(affectations.date, finPrevisionnel)];
-  if (selFreelances.length) condRegie.push(inArray(affectations.freelanceId, selFreelances));
-  if (selClients.length) condRegie.push(inArray(missions.clientId, selClients));
-  if (selMissions.length) condRegie.push(inArray(affectations.missionId, selMissions));
   const affsPromise = db
     .select({
       date: affectations.date,
@@ -151,103 +75,94 @@ export default async function PageStatistiques({
     .innerJoin(missions, eq(affectations.missionId, missions.id))
     .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
     .innerJoin(clients, eq(missions.clientId, clients.id))
-    .where(and(...condRegie));
+    .where(
+      and(gte(affectations.date, debutPrevisionnel), lte(affectations.date, finPrevisionnel))
+    );
 
-  let encaissementsRealisesPromise: Promise<EncaissementPilotage[]> = Promise.resolve([]);
-  let encaissementsPrevusPromise: Promise<EncaissementPilotage[]> = Promise.resolve([]);
-  let decaissementsRealisesPromise: Promise<DecaissementPilotage[]> = Promise.resolve([]);
-  let decaissementsPrevusPromise: Promise<DecaissementPrevuRow[]> = Promise.resolve([]);
-
-  if (forfaitActif) {
-    if (selFreelances.length === 0) {
-      const condEncRealises = [
+  const encaissementsRealisesPromise = db
+    .select({
+      date: encaissements.date,
+      montant: encaissements.montant,
+      statut: encaissements.statut,
+      fiabilite: encaissements.fiabilite,
+    })
+    .from(encaissements)
+    .innerJoin(projets, eq(encaissements.projetId, projets.id))
+    .where(
+      and(
         eq(encaissements.statut, "encaisse"),
         eq(projets.actif, true),
         ne(projets.statutCommercial, "perdu"),
         gte(encaissements.date, debutRealise),
-        lte(encaissements.date, finRealise),
-      ];
-      if (selClients.length) condEncRealises.push(inArray(projets.clientId, selClients));
-      encaissementsRealisesPromise = db
-        .select({
-          date: encaissements.date,
-          montant: encaissements.montant,
-          statut: encaissements.statut,
-          fiabilite: encaissements.fiabilite,
-        })
-        .from(encaissements)
-        .innerJoin(projets, eq(encaissements.projetId, projets.id))
-        .where(and(...condEncRealises));
+        lte(encaissements.date, finRealise)
+      )
+    );
 
-      const condEncPrevus = [
+  const encaissementsPrevusPromise = db
+    .select({
+      date: encaissements.date,
+      montant: encaissements.montant,
+      statut: encaissements.statut,
+      fiabilite: encaissements.fiabilite,
+      projetNom: projets.nom,
+      clientNom: clients.nom,
+      libelle: encaissements.libelle,
+    })
+    .from(encaissements)
+    .innerJoin(projets, eq(encaissements.projetId, projets.id))
+    .innerJoin(clients, eq(projets.clientId, clients.id))
+    .where(
+      and(
         eq(encaissements.statut, "prevu"),
         eq(projets.actif, true),
         ne(projets.statutCommercial, "perdu"),
         gte(encaissements.date, debutPrevisionnel),
-        lte(encaissements.date, finPrevisionnel),
-      ];
-      if (selClients.length) condEncPrevus.push(inArray(projets.clientId, selClients));
-      encaissementsPrevusPromise = db
-        .select({
-          date: encaissements.date,
-          montant: encaissements.montant,
-          statut: encaissements.statut,
-          fiabilite: encaissements.fiabilite,
-          projetNom: projets.nom,
-          clientNom: clients.nom,
-          libelle: encaissements.libelle,
-        })
-        .from(encaissements)
-        .innerJoin(projets, eq(encaissements.projetId, projets.id))
-        .innerJoin(clients, eq(projets.clientId, clients.id))
-        .where(and(...condEncPrevus));
-    }
+        lte(encaissements.date, finPrevisionnel)
+      )
+    );
 
-    const condDecRealises = [
-      eq(decaissements.statut, "decaisse"),
-      eq(projets.actif, true),
-      ne(projets.statutCommercial, "perdu"),
-      gte(decaissements.date, debutRealise),
-      lte(decaissements.date, finRealise),
-    ];
-    if (selClients.length) condDecRealises.push(inArray(projets.clientId, selClients));
-    if (selFreelances.length) condDecRealises.push(inArray(decaissements.freelanceId, selFreelances));
-    decaissementsRealisesPromise = db
-      .select({
-        date: decaissements.date,
-        montant: decaissements.montant,
-        statut: decaissements.statut,
-      })
-      .from(decaissements)
-      .innerJoin(projets, eq(decaissements.projetId, projets.id))
-      .where(and(...condDecRealises));
+  const decaissementsRealisesPromise = db
+    .select({
+      date: decaissements.date,
+      montant: decaissements.montant,
+      statut: decaissements.statut,
+    })
+    .from(decaissements)
+    .innerJoin(projets, eq(decaissements.projetId, projets.id))
+    .where(
+      and(
+        eq(decaissements.statut, "decaisse"),
+        eq(projets.actif, true),
+        ne(projets.statutCommercial, "perdu"),
+        gte(decaissements.date, debutRealise),
+        lte(decaissements.date, finRealise)
+      )
+    );
 
-    const condDecPrevus = [
-      eq(decaissements.statut, "prevu"),
-      eq(projets.actif, true),
-      ne(projets.statutCommercial, "perdu"),
-      gte(decaissements.date, debutPrevisionnel),
-      lte(decaissements.date, finPrevisionnel),
-    ];
-    if (selClients.length) condDecPrevus.push(inArray(projets.clientId, selClients));
-    if (selFreelances.length) condDecPrevus.push(inArray(decaissements.freelanceId, selFreelances));
-    decaissementsPrevusPromise = db
-      .select({
-        date: decaissements.date,
-        montant: decaissements.montant,
-        statut: decaissements.statut,
-        projetNom: projets.nom,
-        clientNom: clients.nom,
-        freelancePrenom: freelances.prenom,
-        freelanceNomDb: freelances.nom,
-        libelle: decaissements.libelle,
-      })
-      .from(decaissements)
-      .innerJoin(projets, eq(decaissements.projetId, projets.id))
-      .innerJoin(clients, eq(projets.clientId, clients.id))
-      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
-      .where(and(...condDecPrevus));
-  }
+  const decaissementsPrevusPromise = db
+    .select({
+      date: decaissements.date,
+      montant: decaissements.montant,
+      statut: decaissements.statut,
+      projetNom: projets.nom,
+      clientNom: clients.nom,
+      freelancePrenom: freelances.prenom,
+      freelanceNomDb: freelances.nom,
+      libelle: decaissements.libelle,
+    })
+    .from(decaissements)
+    .innerJoin(projets, eq(decaissements.projetId, projets.id))
+    .innerJoin(clients, eq(projets.clientId, clients.id))
+    .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
+    .where(
+      and(
+        eq(decaissements.statut, "prevu"),
+        eq(projets.actif, true),
+        ne(projets.statutCommercial, "perdu"),
+        gte(decaissements.date, debutPrevisionnel),
+        lte(decaissements.date, finPrevisionnel)
+      )
+    );
 
   const [
     affs,
@@ -255,14 +170,12 @@ export default async function PageStatistiques({
     encaissementsPrevus,
     decaissementsRealises,
     decaissementsPrevus,
-    [optFreelances, optClients, optMissions],
   ] = await Promise.all([
     affsPromise,
     encaissementsRealisesPromise,
     encaissementsPrevusPromise,
     decaissementsRealisesPromise,
     decaissementsPrevusPromise,
-    optionsPromise,
   ]);
 
   const pilotage = calculerPilotageMensuel({
@@ -296,31 +209,6 @@ export default async function PageStatistiques({
 
   return (
     <div className="space-y-6">
-      <Suspense>
-        <StatsFiltres
-          periode={periode}
-          grouper="mois"
-          debut={debutPerso}
-          fin={finPerso}
-          showGrouper={false}
-        >
-          <StatsFiltreDrawer
-            clients={optClients.map((c) => ({ value: String(c.id), label: c.nom }))}
-            freelances={optFreelances.map((f) => ({
-              value: String(f.id),
-              label: `${f.prenom} ${f.nom}`,
-            }))}
-            missions={optMissions.map((m) => ({
-              value: String(m.id),
-              label: `${m.nom} (${m.clientNom})`,
-            }))}
-            selClients={selClients.map(String)}
-            selFreelances={selFreelances.map(String)}
-            selMissions={selMissions.map(String)}
-          />
-        </StatsFiltres>
-      </Suspense>
-
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Indicateur titre="CA encaissé" valeur={formatEuro(totalRealise.ca)} />
         <Indicateur titre="Marge réalisée" valeur={formatEuro(totalRealise.marge)} />
