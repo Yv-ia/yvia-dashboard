@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculerPilotageMensuel } from "./pilotage-calculs";
+import { calculerPilotageMensuel, lignesDetailMois } from "./pilotage-calculs";
 
 describe("calculerPilotageMensuel", () => {
   it("place le mois courant dans le réalisé et le prévisionnel selon le statut", () => {
@@ -126,6 +126,97 @@ describe("calculerPilotageMensuel", () => {
         freelanceNom: "Grace Hopper",
         libelle: "Sprint 1",
         montant: 3000,
+      },
+    ]);
+  });
+});
+
+describe("lignesDetailMois", () => {
+  it("aplatit les détails au format du dashboard : missions puis projets agrégés", () => {
+    const lignes = lignesDetailMois({
+      regie: [
+        {
+          cle: "Ada Lovelace|Refonte CRM|ACME|500|800",
+          freelanceNom: "Ada Lovelace",
+          missionNom: "Refonte CRM",
+          clientNom: "ACME",
+          jours: 2,
+          caMax: 1600,
+          caProb: 1600,
+          charges: 1000,
+          marge: 600,
+        },
+      ],
+      encaissements: [
+        {
+          date: "2026-06-15",
+          projetNom: "Forfait Data",
+          clientNom: "Globex",
+          libelle: "Acompte",
+          montant: 10000,
+          montantProbable: 8000,
+          fiabilite: "80",
+        },
+        {
+          date: "2026-06-28",
+          projetNom: "Forfait Data",
+          clientNom: "Globex",
+          libelle: "Solde",
+          montant: 2000,
+          montantProbable: 1000,
+          fiabilite: "50",
+        },
+      ],
+      decaissements: [
+        {
+          date: "2026-06-22",
+          projetNom: "Site vitrine",
+          clientNom: "Initech",
+          freelanceNom: "Margaret Hamilton",
+          libelle: null,
+          montant: 1500,
+        },
+        {
+          date: "2026-06-20",
+          projetNom: "Forfait Data",
+          clientNom: "Globex",
+          freelanceNom: "Grace Hopper",
+          libelle: "Sprint 1",
+          montant: 3000,
+        },
+      ],
+    });
+
+    expect(lignes).toEqual([
+      {
+        cle: "mission|Ada Lovelace|Refonte CRM|ACME|500|800",
+        libelle: "Refonte CRM",
+        freelanceNom: "Ada Lovelace",
+        clientNom: "ACME",
+        encaissements: 1600,
+        decaissements: 1000,
+        jours: 2,
+        marge: 600,
+      },
+      {
+        cle: "projet|Forfait Data|Globex",
+        libelle: "Forfait Data",
+        freelanceNom: null,
+        clientNom: "Globex",
+        encaissements: 12000,
+        decaissements: 3000,
+        jours: null,
+        marge: 9000,
+      },
+      {
+        cle: "projet|Site vitrine|Initech",
+        libelle: "Site vitrine",
+        freelanceNom: null,
+        clientNom: "Initech",
+        encaissements: 0,
+        decaissements: 1500,
+        jours: null,
+        marge: -1500,
       },
     ]);
   });

@@ -104,6 +104,68 @@ export type DetailsPrevisionnel = {
   decaissements: DetailDecaissementPrevu[];
 };
 
+// Même structure que le tableau « Détail du mois » du dashboard : une ligne
+// par mission (régie) puis une par projet (flux forfait agrégés).
+export type LigneDetailMois = {
+  cle: string;
+  libelle: string;
+  freelanceNom: string | null;
+  clientNom: string;
+  encaissements: number;
+  decaissements: number;
+  jours: number | null;
+  marge: number;
+};
+
+export function lignesDetailMois(details: DetailsPrevisionnel): LigneDetailMois[] {
+  const missions: LigneDetailMois[] = details.regie.map((l) => ({
+    cle: `mission|${l.cle}`,
+    libelle: l.missionNom,
+    freelanceNom: l.freelanceNom,
+    clientNom: l.clientNom,
+    encaissements: l.caMax,
+    decaissements: l.charges,
+    jours: l.jours,
+    marge: l.marge,
+  }));
+
+  const projets = new Map<string, LigneDetailMois>();
+  const getProjet = (projetNom: string, clientNom: string) => {
+    const cle = `projet|${projetNom}|${clientNom}`;
+    const ligne =
+      projets.get(cle) ??
+      ({
+        cle,
+        libelle: projetNom,
+        freelanceNom: null, // pas de freelance unique sur un forfait
+        clientNom,
+        encaissements: 0,
+        decaissements: 0,
+        jours: null, // notion propre à la régie
+        marge: 0,
+      } satisfies LigneDetailMois);
+    projets.set(cle, ligne);
+    return ligne;
+  };
+  for (const e of details.encaissements) {
+    const ligne = getProjet(e.projetNom, e.clientNom);
+    ligne.encaissements = arrondi(ligne.encaissements + e.montant);
+    ligne.marge = arrondi(ligne.encaissements - ligne.decaissements);
+  }
+  for (const d of details.decaissements) {
+    const ligne = getProjet(d.projetNom, d.clientNom);
+    ligne.decaissements = arrondi(ligne.decaissements + d.montant);
+    ligne.marge = arrondi(ligne.encaissements - ligne.decaissements);
+  }
+
+  return [
+    ...missions,
+    ...Array.from(projets.values()).sort((a, b) =>
+      `${a.libelle}|${a.clientNom}`.localeCompare(`${b.libelle}|${b.clientNom}`, "fr")
+    ),
+  ];
+}
+
 const arrondi = (n: number) => Math.round(n * 100) / 100;
 const nombre = (n: Montant) => Number(n);
 const libelle = (v: string | null | undefined, fallback: string) => v?.trim() || fallback;
