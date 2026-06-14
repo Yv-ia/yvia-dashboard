@@ -70,8 +70,8 @@ if [ -n "${HECATON_DB:-}" ] && [ -n "${HECATON_DATABASE_URL:-}" ]; then
   echo "→ Création / mise à jour des tables..."
   npm run db:push
 
-  echo "→ Création du compte admin de démonstration..."
-  npm run seed
+  echo "→ Chargement du jeu de données de preview..."
+  npm run seed:simulation
 
   echo "✅ Environnement prêt. L'application tournera sur le port ${APP_PORT}."
   exit 0

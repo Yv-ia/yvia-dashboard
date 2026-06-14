@@ -146,7 +146,7 @@ printf 'test-secret'
     expect(readFileSync(npmLog, "utf8").trim().split("\n")).toEqual([
       "install --include=dev",
       "run db:push",
-      "run seed",
+      "run seed:simulation",
     ]);
     expect(readFileSync(nodeLog, "utf8")).toContain("scripts/hecaton-db.mjs up");
   });
