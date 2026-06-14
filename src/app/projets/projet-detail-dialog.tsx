@@ -69,6 +69,7 @@ export function ProjetDetailDialog({
   freelancesActifs,
   open,
   onOpenChange,
+  voirMarges = true,
 }: {
   projet: {
     id: number;
@@ -87,6 +88,7 @@ export function ProjetDetailDialog({
   freelancesActifs: OptionFreelance[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  voirMarges?: boolean; // false (commercial) : coûts/marge masqués, pas d'ajout d'événement
 }) {
   const router = useRouter();
 
@@ -157,12 +159,16 @@ export function ProjetDetailDialog({
           </div>
         </div>
 
-        {/* Récap (réalisé, sauf "reste à planifier" qui tient compte du prévu) */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+        {/* Récap (réalisé, sauf "reste à planifier" qui tient compte du prévu).
+            Décaissé/Marge masqués au commercial : les décaissements ne sont alors
+            pas transmis, afficher une marge serait trompeur (faux 100 %). */}
+        <div className={`grid grid-cols-2 gap-3 ${voirMarges ? "sm:grid-cols-5" : "sm:grid-cols-3"}`}>
           <Recap titre="Budget" valeur={formatEuro(Number(projet.budget))} />
           <Recap titre="Encaissé" valeur={formatEuro(totalEncReel)} />
-          <Recap titre="Décaissé" valeur={formatEuro(totalDecReel)} />
-          <Recap titre="Marge réalisée" valeur={formatEuro(margeReelle)} accent={margeReelle < 0} />
+          {voirMarges ? <Recap titre="Décaissé" valeur={formatEuro(totalDecReel)} /> : null}
+          {voirMarges ? (
+            <Recap titre="Marge réalisée" valeur={formatEuro(margeReelle)} accent={margeReelle < 0} />
+          ) : null}
           <Recap titre="Reste à planifier" valeur={formatEuro(resteAPlanifier)} />
         </div>
 
@@ -177,7 +183,9 @@ export function ProjetDetailDialog({
                 </span>
               ) : null}
             </p>
-            <EvenementFormDialog projetId={projet.id} freelancesActifs={freelancesActifs} />
+            {voirMarges ? (
+              <EvenementFormDialog projetId={projet.id} freelancesActifs={freelancesActifs} />
+            ) : null}
           </div>
           <div className="space-y-1">
             {evenements.length === 0 ? (

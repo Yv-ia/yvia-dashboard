@@ -92,6 +92,28 @@ describe("FreelanceRow", () => {
     expect(html).toContain("aria-checked=\"false\"");
   });
 
+  test("masque la cellule de gain quand le gain n'est pas fourni (commercial)", () => {
+    const avecGain = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <FreelanceRowView id={7} nom="Ada Lovelace" gain={1200} onOpen={() => {}} />
+        </tbody>
+      </table>
+    );
+    const sansGain = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <FreelanceRowView id={7} nom="Ada Lovelace" onOpen={() => {}} />
+        </tbody>
+      </table>
+    );
+
+    const cellules = (html: string) => html.match(/<td(?:\s|>)/g)?.length ?? 0;
+    expect(cellules(sansGain)).toBe(cellules(avecGain) - 1);
+    expect(sansGain).toContain("Ada Lovelace");
+    expect(sansGain).not.toContain("200");
+  });
+
   test("pas d'interrupteur quand la visibilité n'est pas fournie (vue archives)", () => {
     const html = renderToStaticMarkup(
       <table>
