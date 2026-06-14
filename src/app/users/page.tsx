@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import {
   creerInvitation,
+  modifierRoleUtilisateur,
   supprimerInvitation,
   supprimerUtilisateur,
 } from "./actions";
@@ -78,6 +79,7 @@ export default async function PageUsers() {
                   key={utilisateur.id}
                   utilisateur={utilisateur}
                   estUtilisateurCourant={utilisateur.id === session.userId}
+                  modifierRole={modifierRoleUtilisateur}
                   supprimer={supprimerUtilisateur}
                 />
               ))}
