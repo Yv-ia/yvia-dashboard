@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/confirm-dialog";
@@ -14,6 +15,8 @@ export function EtendreMoisButton({
   mois: number;
   libelleMoisSuivant: string;
 }) {
+  const router = useRouter();
+
   return (
     <ConfirmDialog
       trigger={
@@ -26,8 +29,10 @@ export function EtendreMoisButton({
       confirmLabel="Étendre"
       onConfirm={async () => {
         const res = await etendreAuMoisSuivant(annee, mois);
-        if (res.ok) toast.success("Planning étendu au mois suivant.");
-        else toast.error(res.message ?? "Action impossible.");
+        if (res.ok) {
+          toast.success("Planning étendu au mois suivant.");
+          router.refresh();
+        } else toast.error(res.message ?? "Action impossible.");
       }}
     />
   );

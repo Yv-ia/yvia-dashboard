@@ -21,8 +21,16 @@ export type Lien = {
 // Une section listant des entités liées.
 export type SectionLiens = { titre: string; liens: Lien[]; vide: string };
 
-// Un champ éditable « au clic » (nom, TJM, budget...).
-export type ChampEditable = { cle: string; label: string; valeur: string; type: "text" | "number" };
+// Un champ éditable « au clic » (nom, TJM, budget, statut...).
+// Pour le type "select", `options` liste les choix possibles.
+export type OptionChamp = { value: string; label: string };
+export type ChampEditable = {
+  cle: string;
+  label: string;
+  valeur: string;
+  type: "text" | "number" | "select";
+  options?: OptionChamp[];
+};
 
 export type DetailEntite = {
   ref: EntiteRef;

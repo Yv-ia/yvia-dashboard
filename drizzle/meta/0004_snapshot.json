@@ -1,6 +1,6 @@
 {
-  "id": "e96cf518-56f6-4c81-9870-56e99c1da924",
-  "prevId": "0a8cc994-c412-4b1e-8d71-9c52496c6573",
+  "id": "95c6b132-e8b0-409f-9fd1-01373f62eae9",
+  "prevId": "e96cf518-56f6-4c81-9870-56e99c1da924",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -82,6 +82,116 @@
           "columns": [
             "freelance_id",
             "date"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.charges_fixes": {
+      "name": "charges_fixes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "libelle": {
+          "name": "libelle",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "montant_mensuel": {
+          "name": "montant_mensuel",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_debut": {
+          "name": "date_debut",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.charges_fixes_valeurs": {
+      "name": "charges_fixes_valeurs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "charge_fixe_id": {
+          "name": "charge_fixe_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mois": {
+          "name": "mois",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "montant": {
+          "name": "montant",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "charges_fixes_valeurs_charge_fixe_id_charges_fixes_id_fk": {
+          "name": "charges_fixes_valeurs_charge_fixe_id_charges_fixes_id_fk",
+          "tableFrom": "charges_fixes_valeurs",
+          "tableTo": "charges_fixes",
+          "columnsFrom": [
+            "charge_fixe_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "une_valeur_par_charge_et_mois": {
+          "name": "une_valeur_par_charge_et_mois",
+          "nullsNotDistinct": false,
+          "columns": [
+            "charge_fixe_id",
+            "mois"
           ]
         }
       },

@@ -405,6 +405,24 @@ export default async function PagePlanning({
       };
     });
   const detailLignes = [...detailMissions, ...detailProjets];
+  const planningCalendarKey = [
+    `${annee}-${mois}`,
+    freelancesActifs
+      .map((f) => `${f.id}:${f.prenom}:${f.nom}:${f.afficherPlanning}`)
+      .sort()
+      .join("|"),
+    missionsDispo
+      .map((m) => `${m.id}:${m.freelanceId}:${m.nom}:${m.clientNom}`)
+      .sort()
+      .join("|"),
+    affs
+      .map(
+        (a) =>
+          `${a.freelanceId}:${a.date}:${a.missionId}:${a.missionNom}:${a.clientNom}:${a.tjmAchat}:${a.tjmVente}`
+      )
+      .sort()
+      .join("|"),
+  ].join(";");
 
   return (
     <div className="space-y-6">
@@ -468,6 +486,7 @@ export default async function PagePlanning({
           </div>
 
           <PlanningCalendar
+            key={planningCalendarKey}
             jours={jours}
             lignes={lignes}
             projets={projetsLignes}

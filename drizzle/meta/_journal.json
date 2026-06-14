@@ -26,8 +26,15 @@
     {
       "idx": 3,
       "version": "7",
-      "when": 1781452152491,
-      "tag": "0003_charges_fixes",
+      "when": 1781465525680,
+      "tag": "0003_statut_client",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781469469559,
+      "tag": "0004_charges_fixes",
       "breakpoints": true
     }
   ]

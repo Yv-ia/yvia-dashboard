@@ -28,6 +28,8 @@ import {
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { deconnexion } from "@/app/login/actions";
+import type { Role } from "@/lib/auth/session";
+import { peutAccederRoute, peutGererUtilisateurs } from "@/lib/auth/permissions";
 
 // `match` = préfixes de chemin qui rendent l'onglet actif (regroupements de sous-pages).
 type Lien = { href: string; label: string; icone: LucideIcon; match?: string[] };
@@ -82,10 +84,15 @@ function LiensNavigation({
   );
 }
 
-export function Sidebar({ nomAffiche, admin }: { nomAffiche: string; admin: boolean }) {
+export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }) {
   const pathname = usePathname();
   const [menuOuvert, setMenuOuvert] = useState(false);
-  const liens = admin ? LIENS : LIENS.filter((lien) => lien.href !== "/users");
+  // On n'affiche que les liens autorisés par le rôle : Users réservé à l'admin,
+  // et le commercial est restreint à ses pages (cf. peutAccederRoute).
+  const liens = LIENS.filter((lien) => {
+    if (lien.href === "/users") return peutGererUtilisateurs({ role });
+    return peutAccederRoute({ role }, lien.href);
+  });
 
   // Filet de sécurité : referme le panneau mobile après chaque navigation
   // (ajustement d'état pendant le rendu, recommandé par React plutôt qu'un effet).
