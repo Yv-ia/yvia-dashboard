@@ -5,16 +5,16 @@ import { db } from "@/db";
 import { freelances } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth/server";
+import { exigerDelivery } from "@/lib/auth/garde";
 
 export type FreelanceCree = { id: number; prenom: string; nom: string };
 export type Resultat =
   | { ok: false; message?: string }
   | { ok: true; freelance?: FreelanceCree };
 
+// Gestion des freelances = delivery : interdite au commercial.
 async function verifierConnecte(): Promise<Resultat> {
-  if (await getSession()) return { ok: true };
-  return { ok: false, message: "Vous n'êtes pas connecté." };
+  return exigerDelivery();
 }
 
 export async function creerFreelance(formData: FormData): Promise<Resultat> {

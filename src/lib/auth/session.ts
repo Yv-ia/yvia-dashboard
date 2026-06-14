@@ -5,7 +5,19 @@
 export const SESSION_COOKIE = "yvia_session";
 export const DUREE_SESSION_MS = 30 * 24 * 60 * 60 * 1000; // 30 jours
 
-export type Role = "admin" | "user";
+// Rôles :
+// - 'admin'      : tous les droits, y compris la gestion des utilisateurs.
+// - 'user'       : associé. Accès opérationnel complet (delivery + marges), pas la
+//                  gestion des utilisateurs.
+// - 'commercial' : accès commercial. Voit le pipeline (clients, leads/signés) mais
+//                  PAS les marges/coûts, et ne pilote pas le delivery.
+export type Role = "admin" | "user" | "commercial";
+
+export const ROLES: readonly Role[] = ["admin", "user", "commercial"];
+
+export function estRoleValide(valeur: unknown): valeur is Role {
+  return valeur === "admin" || valeur === "user" || valeur === "commercial";
+}
 
 // pv = « password version » : ancre de révocation dérivée du hash du mot de
 // passe courant. Quand le mot de passe change, les jetons émis avant deviennent
@@ -84,7 +96,7 @@ export async function verifierSession(token: string | undefined | null): Promise
     if (typeof session.exp !== "number" || session.exp < Date.now()) return null;
     if (typeof session.userId !== "number") return null;
     if (typeof session.pv !== "string" || session.pv === "") return null;
-    if (session.role !== "admin" && session.role !== "user") return null;
+    if (!estRoleValide(session.role)) return null;
     return session;
   } catch {
     return null;

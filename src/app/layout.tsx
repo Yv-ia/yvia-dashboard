@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "./sidebar";
 import { DrawerProvider } from "./_drawer/drawer-stack";
 import { EnregistrementServiceWorker } from "@/components/enregistrement-service-worker";
-import { estAdmin } from "@/lib/auth/session";
 import { getSession } from "@/lib/auth/server";
 
 export const metadata: Metadata = {
@@ -46,7 +45,7 @@ export default async function RootLayout({
           <DrawerProvider>
             {/* Colonne sur mobile (barre en haut), ligne sur desktop (sidebar à gauche). */}
             <div className="flex min-h-screen flex-col lg:flex-row">
-              <Sidebar nomAffiche={nomAffiche} admin={estAdmin(session)} />
+              <Sidebar nomAffiche={nomAffiche} role={session.role} />
               <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
                 {children}
               </main>

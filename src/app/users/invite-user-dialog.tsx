@@ -14,7 +14,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import type { ResultatInvitation } from "./actions";
+
+const ROLES_INVITATION = [
+  { value: "user", label: "Associé (accès complet)" },
+  { value: "commercial", label: "Commercial (pipeline, sans marges)" },
+  { value: "admin", label: "Administrateur" },
+];
 
 export function InviteUserDialog({
   action,
@@ -81,6 +88,11 @@ export function InviteUserDialog({
               <Label htmlFor="invite-nom">Nom</Label>
               <Input id="invite-nom" name="nom" />
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="invite-role">Rôle</Label>
+            <Select id="invite-role" name="role" defaultValue="user" options={ROLES_INVITATION} />
           </div>
 
           {lien ? (

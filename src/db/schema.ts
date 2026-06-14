@@ -60,6 +60,10 @@ export const clients = pgTable("clients", {
   // Fiabilité de paiement par défaut du client (catégorie : securise/probable/incertain/arisque).
   // Optionnel : sert de valeur par défaut dans la cascade du prévisionnel.
   fiabiliteDefaut: text("fiabilite_defaut"),
+  // Statut commercial du compte : lead -> prospect -> signe (-> inactif).
+  // Nouveaux clients = 'lead' par défaut ; les clients existants en production
+  // seront migrés en 'signe' (cf. migration 0003).
+  statut: text("statut").notNull().default("lead"),
 });
 
 // --- MISSIONS ---

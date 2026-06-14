@@ -15,11 +15,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import { STATUTS_CLIENT, STATUT_CLIENT_DEFAUT } from "@/lib/clients/statut";
 import type { ClientCree, Resultat } from "./actions";
 
 type Client = {
   id: number;
   nom: string;
+  statut?: string;
 };
 
 export function ClientFormDialog({
@@ -48,7 +51,7 @@ export function ClientFormDialog({
         <form
           // Remonte le formulaire si les valeurs changent (ex : après enregistrement
           // et revalidation), au lieu de muter un champ déjà initialisé.
-          key={client ? `${client.id}:${client.nom}` : "new"}
+          key={client ? `${client.id}:${client.nom}:${client.statut ?? ""}` : "new"}
           action={async (formData) => {
             const res = await action(formData);
             if (res.ok) {
@@ -66,6 +69,16 @@ export function ClientFormDialog({
           <div className="space-y-2">
             <Label htmlFor="nom">Société *</Label>
             <Input id="nom" name="nom" defaultValue={client?.nom ?? ""} required />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="statut">Statut</Label>
+            <Select
+              id="statut"
+              name="statut"
+              defaultValue={client?.statut ?? STATUT_CLIENT_DEFAUT}
+              options={STATUTS_CLIENT.map((s) => ({ value: s.key, label: s.label }))}
+            />
           </div>
 
           <DialogFooter>

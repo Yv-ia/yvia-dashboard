@@ -7,7 +7,7 @@ import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
-import { verifierSession, pvDepuisHash, SESSION_COOKIE, type Session } from "./session";
+import { verifierSession, pvDepuisHash, estRoleValide, SESSION_COOKIE, type Session } from "./session";
 
 export type SessionServeur = Session & { prenom: string | null; nom: string | null };
 
@@ -37,7 +37,9 @@ export const getSession = cache(async function getSession(): Promise<SessionServ
     email: u.email,
     exp: session.exp,
     pv: session.pv,
-    role: u.role === "user" ? "user" : "admin",
+    // Le rôle fait foi en base. Une valeur inconnue retombe sur 'admin' pour ne
+    // pas dégrader les comptes associés historiques (créés avant les rôles).
+    role: estRoleValide(u.role) ? u.role : "admin",
     prenom: u.prenom,
     nom: u.nom,
   };
