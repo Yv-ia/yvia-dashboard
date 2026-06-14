@@ -3,6 +3,7 @@ import {
   peutGererUtilisateurs,
   peutVoirMarges,
   peutEditerDelivery,
+  peutSupprimerEntites,
   peutAccederRoute,
   labelRole,
 } from "./permissions";
@@ -28,6 +29,13 @@ describe("capacités par rôle", () => {
     expect(peutEditerDelivery(r("admin"))).toBe(true);
     expect(peutEditerDelivery(r("user"))).toBe(true);
     expect(peutEditerDelivery(r("commercial"))).toBe(false);
+  });
+
+  it("supprimer définitivement une entité : admin seul", () => {
+    expect(peutSupprimerEntites(r("admin"))).toBe(true);
+    expect(peutSupprimerEntites(r("user"))).toBe(false);
+    expect(peutSupprimerEntites(r("commercial"))).toBe(false);
+    expect(peutSupprimerEntites(null)).toBe(false);
   });
 });
 

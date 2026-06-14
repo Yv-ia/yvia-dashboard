@@ -6,8 +6,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronLeft, Power } from "lucide-react";
+import { ChevronLeft, Power, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import {
   Sheet,
   SheetContent,
@@ -16,7 +17,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import { chargerEntite, basculerActif, modifierChampEntite } from "./actions";
+import { chargerEntite, basculerActif, modifierChampEntite, supprimerEntite } from "./actions";
 import { ChampInline } from "./champ-inline";
 import { LIBELLE_TYPE, type DetailEntite, type EntiteRef, type Lien } from "./types";
 
@@ -54,6 +55,7 @@ export function DrawerProvider({ children }: { children: React.ReactNode }) {
             peutRevenir={pile.length > 1}
             onRetour={retour}
             onOuvrir={ouvrir}
+            onFermer={fermer}
           />
         ) : null}
       </Sheet>
@@ -66,11 +68,13 @@ function DrawerContenu({
   peutRevenir,
   onRetour,
   onOuvrir,
+  onFermer,
 }: {
   entite: EntiteRef;
   peutRevenir: boolean;
   onRetour: () => void;
   onOuvrir: (ref: EntiteRef) => void;
+  onFermer: () => void;
 }) {
   const router = useRouter();
   const [detail, setDetail] = React.useState<DetailEntite | null>(null);
@@ -97,6 +101,19 @@ function DrawerContenu({
     setEnCours(false);
     setNonce((n) => n + 1);
     router.refresh();
+  }
+
+  async function supprimer() {
+    setEnCours(true);
+    const res = await supprimerEntite(entite);
+    if (res.ok) {
+      toast.success("Supprimé définitivement.");
+      onFermer();
+      router.refresh();
+    } else {
+      toast.error(res.message ?? "Suppression impossible.");
+      setEnCours(false);
+    }
   }
 
   async function sauverChamp(cle: string, valeur: string) {
@@ -196,6 +213,21 @@ function DrawerContenu({
             <Power className="size-4" />
             {detail.actif ? detail.actionLabel : entite.type === "projet" ? "Réouvrir" : "Réactiver"}
           </Button>
+          {detail.suppression ? (
+            <ConfirmDialog
+              trigger={
+                <Button variant="ghost" className="text-destructive hover:text-destructive" disabled={enCours}>
+                  <Trash2 className="size-4" />
+                  Supprimer définitivement
+                </Button>
+              }
+              titre="Supprimer définitivement ?"
+              description={detail.suppression.avertissement}
+              confirmLabel="Supprimer"
+              destructif
+              onConfirm={supprimer}
+            />
+          ) : null}
         </SheetFooter>
       ) : null}
     </SheetContent>

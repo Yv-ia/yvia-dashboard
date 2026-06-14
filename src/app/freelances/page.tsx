@@ -9,10 +9,13 @@ import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
   Table,
   TableBody,
+  TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatEuro } from "@/lib/format";
 import { FreelanceFormDialog } from "./freelance-form-dialog";
 import { FreelanceRow } from "./freelance-row";
 import { creerFreelance } from "./actions";
@@ -45,6 +48,8 @@ export default async function PageFreelances({
     const g = gainParFreelance.get(a.freelanceId) ?? 0;
     gainParFreelance.set(a.freelanceId, g + (Number(a.tjmVente) - Number(a.tjmAchat)));
   }
+  // Total du gain rapporté pour les freelances affichés (ligne de pied).
+  const totalGain = liste.reduce((s, f) => s + (gainParFreelance.get(f.id) ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -109,6 +114,15 @@ export default async function PageFreelances({
                   />
                 ))}
               </TableBody>
+              {liste.length > 1 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right">{formatEuro(totalGain)}</TableCell>
+                    {!archives ? <TableCell /> : null}
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           )}
         </CardContent>

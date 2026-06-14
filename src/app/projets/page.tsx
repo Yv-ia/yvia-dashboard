@@ -9,10 +9,13 @@ import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
   Table,
   TableBody,
+  TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatEuro } from "@/lib/format";
 import { ProjetFormDialog } from "./projet-form-dialog";
 import { ProjetRow } from "./projet-row";
 import { creerProjet } from "./actions";
@@ -132,6 +135,24 @@ export default async function PageProjets({
     jalParProjet.set(j.projetId, arr);
   }
 
+  // Totaux de la liste affichée (réalisé uniquement, comme les colonnes).
+  const sommeRealise = (arr: Evenement[]) =>
+    arr.filter((x) => x.statut !== "prevu").reduce((s, x) => s + Number(x.montant), 0);
+  const totaux = liste.reduce(
+    (acc, p) => {
+      const enc = sommeRealise(encParProjet.get(p.id) ?? []);
+      const dec = sommeRealise(decParProjet.get(p.id) ?? []);
+      const budget = Number(p.budget);
+      acc.budget += budget;
+      acc.enc += enc;
+      acc.dec += dec;
+      acc.marge += enc - dec;
+      acc.reste += budget - enc;
+      return acc;
+    },
+    { budget: 0, enc: 0, dec: 0, marge: 0, reste: 0 }
+  );
+
   return (
     <div className="space-y-6">
       {/* Onglets Actifs / Terminés */}
@@ -211,6 +232,20 @@ export default async function PageProjets({
                   />
                 ))}
               </TableBody>
+              {liste.length > 1 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={3}>Total</TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.budget)}</TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.enc)}</TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.dec)}</TableCell>
+                    <TableCell className={`text-right ${totaux.marge < 0 ? "text-rose-600" : ""}`}>
+                      {formatEuro(totaux.marge)}
+                    </TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.reste)}</TableCell>
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           )}
         </CardContent>
