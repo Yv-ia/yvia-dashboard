@@ -9,7 +9,7 @@ import { randomBytes, createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { apiKeys, users } from "@/db/schema";
-import type { Role } from "./session";
+import { estRoleValide, type Role } from "./session";
 
 // Préfixe lisible : permet de reconnaître une clé Yvia et de filtrer côté
 // vérification avant même de toucher la base.
@@ -91,6 +91,8 @@ export async function verifierCleApi(
     apiKeyId: ligne.apiKeyId,
     userId: ligne.userId,
     email: ligne.email,
-    role: ligne.role === "user" ? "user" : "admin",
+    // On préserve le rôle réel (admin / user / commercial) au lieu de le forcer :
+    // les outils MCP s'en servent pour masquer marges et coûts au commercial.
+    role: estRoleValide(ligne.role) ? ligne.role : "user",
   };
 }

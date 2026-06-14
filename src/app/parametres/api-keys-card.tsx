@@ -62,8 +62,8 @@ export function ApiKeysCard({
         <p className="text-sm text-muted-foreground">
           Connectez un client compatible MCP (Claude, etc.) pour interroger vos données — projets,
           prestas, missions, planning, marge — en posant des questions. L&apos;accès est en{" "}
-          <strong>lecture seule</strong>, mais une clé donne accès à <strong>toutes</strong> les
-          données de l&apos;application : ne la partagez pas.
+          <strong>lecture seule</strong> et une clé hérite des droits de votre compte (un compte
+          commercial ne voit ni les coûts ni les marges) : ne la partagez pas.
         </p>
 
         <div className="space-y-2">

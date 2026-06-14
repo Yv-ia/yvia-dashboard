@@ -28,6 +28,8 @@ import {
 } from "@/app/statistiques/pilotage-calculs";
 import { fusionnerEvenements } from "@/lib/projets/evenements";
 import { labelStatutCommercial, STATUTS_COMMERCIAUX } from "@/lib/projets/statut-commercial";
+import { peutVoirMarges } from "@/lib/auth/permissions";
+import { estRoleValide } from "@/lib/auth/session";
 
 // --- Utilitaires de mise en forme ---------------------------------------------
 
@@ -48,6 +50,23 @@ const erreur = (message: string): ResultatOutil => ({
   content: [{ type: "text", text: message }],
   isError: true,
 });
+
+// Le rôle "commercial" ne voit ni les coûts ni les marges (cf. permissions).
+// Les outils qui exposent ces données refusent donc une clé de ce rôle. Le rôle
+// est porté par le contexte d'auth MCP (extra.authInfo.extra.role), renseigné
+// par la route à partir de la clé API présentée.
+type AuthMcp = { authInfo?: { extra?: Record<string, unknown> } };
+
+function peutVoirMargesAuth(extra: AuthMcp): boolean {
+  const r = extra?.authInfo?.extra?.role;
+  // Allowlist stricte : rôle inconnu ou absent => refus (pas de fuite).
+  return estRoleValide(r) ? peutVoirMarges({ role: r }) : false;
+}
+
+const REFUS_MARGES = erreur(
+  "Accès refusé : ce rôle (commercial) ne peut pas consulter les coûts ni les marges. " +
+    "Outils accessibles : lister_clients, lister_freelances, rechercher."
+);
 
 // Combine des conditions optionnelles en un seul WHERE (undefined = pas de filtre).
 function combiner(conditions: (SQL | undefined)[]): SQL | undefined {
@@ -170,7 +189,8 @@ export function enregistrerOutils(server: McpServer): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ inclure_inactives, freelance_id, client_id }) => {
+    async ({ inclure_inactives, freelance_id, client_id }, extra) => {
+      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
       const where = combiner([
         inclure_inactives ? undefined : eq(missions.actif, true),
         freelance_id ? eq(missions.freelanceId, freelance_id) : undefined,
@@ -231,7 +251,8 @@ export function enregistrerOutils(server: McpServer): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ inclure_inactifs, client_id, statut_commercial }) => {
+    async ({ inclure_inactifs, client_id, statut_commercial }, extra) => {
+      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
       const where = combiner([
         inclure_inactifs ? undefined : eq(projets.actif, true),
         client_id ? eq(projets.clientId, client_id) : undefined,
@@ -300,7 +321,8 @@ export function enregistrerOutils(server: McpServer): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ projet_id }) => {
+    async ({ projet_id }, extra) => {
+      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
       const [p] = await db
         .select({
           id: projets.id,
@@ -408,7 +430,8 @@ export function enregistrerOutils(server: McpServer): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ mois }) => {
+    async ({ mois }, extra) => {
+      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
       const parsed = parseMois(mois);
       if (!parsed) return erreur(`Mois invalide : « ${mois} ». Format attendu : AAAA-MM.`);
       const debutMois = premierJourDuMois(parsed.annee, parsed.mois);
@@ -538,7 +561,8 @@ export function enregistrerOutils(server: McpServer): void {
       },
       annotations: { readOnlyHint: true },
     },
-    async ({ debut, fin }) => {
+    async ({ debut, fin }, extra) => {
+      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
       const maintenant = new Date();
       const debutParsed = debut ? parseMois(debut) : { annee: maintenant.getUTCFullYear(), mois: maintenant.getUTCMonth() + 1 };
       if (!debutParsed) return erreur(`Mois de début invalide : « ${debut} ».`);

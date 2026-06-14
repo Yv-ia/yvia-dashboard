@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifierSession, SESSION_COOKIE } from "@/lib/auth/session";
+import { peutAccederRoute, ROUTE_DEFAUT_COMMERCIAL } from "@/lib/auth/permissions";
 
 // Protège toute l'application : sans session valide, on redirige vers /login.
 export async function proxy(req: NextRequest) {
@@ -14,12 +15,18 @@ export async function proxy(req: NextRequest) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
-  // Déjà connecté et sur /login : on renvoie vers l'accueil.
-  if (session && pathname === "/login") {
+
+  // Restriction par rôle : un commercial n'accède qu'à ses pages. Première ligne
+  // de défense (UX) ; la vraie barrière reste côté pages/Server Actions.
+  if (session && !estPublique && !peutAccederRoute(session, pathname)) {
     const url = req.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = ROUTE_DEFAUT_COMMERCIAL;
     return NextResponse.redirect(url);
   }
+  // Ne pas rediriger /login vers / depuis le proxy : ici on ne vérifie que la
+  // signature du cookie, pas sa révocation en base (mot de passe changé, seed de
+  // preview, compte recréé). Un vieux cookie signé peut donc être refusé ensuite
+  // par getSession(); le laisser accéder à /login évite une boucle / ↔ /login.
   return NextResponse.next();
 }
 

@@ -10,13 +10,13 @@ import {
   dernierJourDuMois,
   listeJoursOuvresDuMois,
 } from "@/lib/calculs/jours-ouvres";
-import { getSession } from "@/lib/auth/server";
+import { exigerDelivery } from "@/lib/auth/garde";
 
 export type Resultat = { ok: boolean; message?: string };
 
+// Le planning est du delivery : interdit au commercial.
 async function verifierConnecte(): Promise<Resultat> {
-  if (await getSession()) return { ok: true };
-  return { ok: false, message: "Vous n'êtes pas connecté." };
+  return exigerDelivery();
 }
 
 // Affecte une liste de jours (AAAA-MM-JJ) d'un freelance à une mission.

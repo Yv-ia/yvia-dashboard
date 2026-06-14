@@ -136,11 +136,13 @@ forfait, le planning et la marge.
 ### Générer une clé
 
 Dans l'application : **Paramètres → Accès API (MCP) → Générer une clé**. La clé
-n'est affichée qu'une seule fois (seule son empreinte est stockée). Une clé donne
-accès en lecture à **toutes** les données : ne la partagez pas, révoquez-la si
-besoin depuis la même page.
+n'est affichée qu'une seule fois (seule son empreinte est stockée). Une clé hérite
+des droits du compte qui l'a créée : un compte **commercial** n'a pas accès aux
+coûts ni aux marges (les outils correspondants renvoient un refus), conformément à
+la gestion des rôles. Ne partagez pas votre clé ; révoquez-la si besoin depuis la
+même page.
 
-> La table `api_keys` est créée par la migration `0003_api_keys`. En production
+> La table `api_keys` est créée par la migration `0004_api_keys`. En production
 > Neon, elle s'applique automatiquement via `npm run db:migrate` (workflow
 > GitHub Actions sur `main`). En local : `npm run db:push`.
 
@@ -213,4 +215,5 @@ PORT=3001 npm run dev        # exemple pour lancer un autre worktree à la main
 - `npm run db:push` : appliquer le schéma à la base
 - `npm run db:migrate` : appliquer les migrations versionnées (à privilégier en production Neon existante)
 - `npm run db:studio` : explorer la base dans le navigateur
+- `npm run seed:simulation` : charger un jeu de données complet pour les previews (voir `docs/preview-seed.md`)
 - `npm test` : lancer les tests
