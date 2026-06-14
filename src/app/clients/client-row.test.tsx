@@ -15,6 +15,7 @@ type RowElement = ReactElement<{
 
 describe("ClientRow", () => {
   const stats = {
+    statut: "signe",
     caTotal: 12000,
     caMois: 3500,
     margeTotale: 4200,
@@ -58,5 +59,41 @@ describe("ClientRow", () => {
     expect(html).toContain("500");
     expect(html).toContain("4");
     expect(html).toContain("200");
+  });
+
+  test("affiche un badge de statut", () => {
+    const html = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <ClientRowView id={7} nom="Wenimmo" {...stats} onOpen={() => {}} />
+        </tbody>
+      </table>
+    );
+    expect(html).toContain("Signé");
+  });
+
+  const compterCellules = (html: string) =>
+    (html.match(/data-slot="table-cell"/g) ?? []).length;
+
+  test("masque la cellule de marge quand margeTotale est absente (rôle commercial)", () => {
+    const sansMarge = { statut: stats.statut, caTotal: stats.caTotal, caMois: stats.caMois };
+    const htmlSansMarge = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <ClientRowView id={7} nom="Wenimmo" {...sansMarge} onOpen={() => {}} />
+        </tbody>
+      </table>
+    );
+    const htmlAvecMarge = renderToStaticMarkup(
+      <table>
+        <tbody>
+          <ClientRowView id={7} nom="Wenimmo" {...stats} onOpen={() => {}} />
+        </tbody>
+      </table>
+    );
+    // Le CA reste visible…
+    expect(htmlSansMarge).toContain("12");
+    // …mais il y a une cellule de moins (la marge) que pour un rôle complet.
+    expect(compterCellules(htmlSansMarge)).toBe(compterCellules(htmlAvecMarge) - 1);
   });
 });

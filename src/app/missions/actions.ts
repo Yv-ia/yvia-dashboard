@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { missions, affectations, clients } from "@/db/schema";
 import { and, eq, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getSession } from "@/lib/auth/server";
+import { exigerDelivery } from "@/lib/auth/garde";
 
 export type MissionCree = {
   id: number;
@@ -28,9 +28,9 @@ type ValeursMission = {
 
 type Lecture = { ok: false; erreur: string } | { ok: true; valeurs: ValeursMission };
 
+// Le delivery (missions) n'est pas modifiable par un commercial.
 async function verifierConnecte(): Promise<Resultat> {
-  if (await getSession()) return { ok: true };
-  return { ok: false, message: "Vous n'êtes pas connecté." };
+  return exigerDelivery();
 }
 
 function lireChampsMission(formData: FormData): Lecture {

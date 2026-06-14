@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
+import { peutVoirMarges } from "@/lib/auth/permissions";
 import {
   affectations,
   clients,
@@ -11,10 +12,11 @@ import {
   missions,
   projets,
 } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
+import { STATUTS_CLIENT, normaliserStatutClient, type StatutClient } from "@/lib/clients/statut";
 import {
   Card,
   CardContent,
@@ -39,26 +41,39 @@ const statsVides: StatsClient = {
   margeTotale: 0,
 };
 
+// Filtres rapides par statut commercial (en plus de l'onglet actifs/archives).
+const FILTRES_STATUT = STATUTS_CLIENT.map((s) => ({ key: s.key, label: s.label }));
+
 export default async function PageClients({
   searchParams,
 }: {
-  searchParams: Promise<{ vue?: string }>;
+  searchParams: Promise<{ vue?: string; statut?: string }>;
 }) {
-  await exigerSession();
-  const { vue } = await searchParams;
+  const session = await exigerSession();
+  const voirMarges = peutVoirMarges(session);
+  const { vue, statut } = await searchParams;
   const archives = vue === "archives";
+  // Filtre de statut optionnel : seule une vraie clé est retenue, sinon "tous".
+  const statutFiltre: StatutClient | null = FILTRES_STATUT.some((f) => f.key === statut)
+    ? (statut as StatutClient)
+    : null;
   const maintenant = new Date();
   const annee = maintenant.getUTCFullYear();
   const mois = maintenant.getUTCMonth() + 1;
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
 
-  // Actifs par défaut ; archivés dans l'onglet Archives.
+  // Conditions de la liste : actif/archivé + éventuellement le statut commercial.
+  const conditions = [eq(clients.actif, !archives)];
+  if (statutFiltre) conditions.push(eq(clients.statut, statutFiltre));
+
+  // Le commercial ne voit pas les coûts : on ne lit même pas les décaissements
+  // ni les TJM d'achat (la marge n'est ni calculée ni transmise au navigateur).
   const [liste, regie, encaissementsForfait, decaissementsForfait] = await Promise.all([
     db
       .select()
       .from(clients)
-      .where(eq(clients.actif, !archives))
+      .where(and(...conditions))
       .orderBy(clients.nom),
     db
       .select({
@@ -78,15 +93,17 @@ export default async function PageClients({
       .from(encaissements)
       .innerJoin(projets, eq(encaissements.projetId, projets.id))
       .where(eq(encaissements.statut, "encaisse")),
-    db
-      .select({
-        clientId: projets.clientId,
-        date: decaissements.date,
-        montant: decaissements.montant,
-      })
-      .from(decaissements)
-      .innerJoin(projets, eq(decaissements.projetId, projets.id))
-      .where(eq(decaissements.statut, "decaisse")),
+    voirMarges
+      ? db
+          .select({
+            clientId: projets.clientId,
+            date: decaissements.date,
+            montant: decaissements.montant,
+          })
+          .from(decaissements)
+          .innerJoin(projets, eq(decaissements.projetId, projets.id))
+          .where(eq(decaissements.statut, "decaisse"))
+      : Promise.resolve([]),
   ]);
   const statsParClient = calculerStatsClients({
     regie,
@@ -95,6 +112,15 @@ export default async function PageClients({
     debutMois,
     finMois,
   });
+
+  // Conserve les query params pertinents quand on change d'onglet/filtre.
+  const lienFiltre = (params: { vue?: string; statut?: string }) => {
+    const sp = new URLSearchParams();
+    if (params.vue) sp.set("vue", params.vue);
+    if (params.statut) sp.set("statut", params.statut);
+    const qs = sp.toString();
+    return qs ? `/clients?${qs}` : "/clients";
+  };
 
   return (
     <div className="space-y-6">
@@ -108,7 +134,7 @@ export default async function PageClients({
         }
       >
         <Link
-          href="/clients"
+          href={lienFiltre({ statut })}
           className={`rounded-md px-3 py-1.5 text-sm ${
             !archives ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
           }`}
@@ -116,7 +142,7 @@ export default async function PageClients({
           Actifs
         </Link>
         <Link
-          href="/clients?vue=archives"
+          href={lienFiltre({ vue: "archives", statut })}
           className={`rounded-md px-3 py-1.5 text-sm ${
             archives ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
           }`}
@@ -124,6 +150,31 @@ export default async function PageClients({
           Archives
         </Link>
       </ListViewToolbar>
+
+      {/* Filtre rapide par statut commercial. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Link
+          href={lienFiltre({ vue })}
+          className={`rounded-full border px-3 py-1 text-xs ${
+            !statutFiltre ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted"
+          }`}
+        >
+          Tous
+        </Link>
+        {FILTRES_STATUT.map((f) => (
+          <Link
+            key={f.key}
+            href={lienFiltre({ vue, statut: f.key })}
+            className={`rounded-full border px-3 py-1 text-xs ${
+              statutFiltre === f.key
+                ? "border-primary bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted"
+            }`}
+          >
+            {f.label}
+          </Link>
+        ))}
+      </div>
 
       <Card>
         <CardHeader>
@@ -144,15 +195,26 @@ export default async function PageClients({
               <TableHeader>
                 <TableRow>
                   <TableHead>Société</TableHead>
+                  <TableHead>Statut</TableHead>
                   <TableHead className="text-right">CA depuis le début</TableHead>
                   <TableHead className="text-right">CA du mois</TableHead>
-                  <TableHead className="text-right">Marge totale</TableHead>
+                  {voirMarges ? <TableHead className="text-right">Marge totale</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {liste.map((client) => {
                   const stats = statsParClient.get(client.id) ?? statsVides;
-                  return <ClientRow key={client.id} id={client.id} nom={client.nom} {...stats} />;
+                  return (
+                    <ClientRow
+                      key={client.id}
+                      id={client.id}
+                      nom={client.nom}
+                      statut={normaliserStatutClient(client.statut)}
+                      caTotal={stats.caTotal}
+                      caMois={stats.caMois}
+                      margeTotale={voirMarges ? stats.margeTotale : undefined}
+                    />
+                  );
                 })}
               </TableBody>
             </Table>

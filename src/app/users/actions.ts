@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { invitations, users } from "@/db/schema";
 import { getSession } from "@/lib/auth/server";
-import { estAdmin } from "@/lib/auth/session";
+import { estAdmin, estRoleValide } from "@/lib/auth/session";
 
 export type Resultat = { ok: boolean; message?: string };
 export type ResultatInvitation = Resultat & { token?: string };
@@ -45,6 +45,9 @@ export async function creerInvitation(formData: FormData): Promise<ResultatInvit
   const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const prenom = String(formData.get("prenom") ?? "").trim() || null;
   const nom = String(formData.get("nom") ?? "").trim() || null;
+  // Rôle attribué au futur compte. Valeur inconnue (ou absente) => 'user'.
+  const roleDemande = String(formData.get("role") ?? "");
+  const role = estRoleValide(roleDemande) ? roleDemande : "user";
   if (!email) return { ok: false, message: "L'email de l'invité est obligatoire." };
 
   const [existant] = await db.select().from(users).where(eq(users.email, email));
@@ -52,7 +55,7 @@ export async function creerInvitation(formData: FormData): Promise<ResultatInvit
 
   const token = randomBytes(32).toString("hex");
   const expireLe = new Date(Date.now() + DUREE_INVITATION_MS).toISOString();
-  await db.insert(invitations).values({ token, email, prenom, nom, expireLe });
+  await db.insert(invitations).values({ token, email, prenom, nom, expireLe, role });
 
   revalidatePath("/users");
   return { ok: true, token };
