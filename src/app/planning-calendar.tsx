@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -103,9 +104,14 @@ export function PlanningCalendar({
   freelancesActifs: { id: number; prenom: string; nom: string }[];
   clientsActifs: { id: number; nom: string }[];
 }) {
+  const router = useRouter();
   const [lignesPlanning, setLignesPlanning] = useState(lignes);
   const [freelancesOptions, setFreelancesOptions] = useState(freelancesActifs);
   const [freelanceDecaissementId, setFreelanceDecaissementId] = useState("");
+
+  function rafraichirDashboard() {
+    router.refresh();
+  }
 
   // Pop-up d'événements d'un projet, pour une date donnée.
   const [popupProjet, setPopupProjet] = useState<{ projetId: number; date: string } | null>(null);
@@ -160,16 +166,20 @@ export function PlanningCalendar({
   async function choisirMission(missionId: number) {
     if (!popup) return;
     const res = await affecterJours(missionId, popup.freelanceId, popup.dates);
-    if (res.ok) toast.success("Planning mis à jour.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Planning mis à jour.");
+      rafraichirDashboard();
+    } else toast.error(res.message ?? "Erreur.");
     fermerPopup();
   }
 
   async function liberer() {
     if (!popup) return;
     const res = await libererJours(popup.freelanceId, popup.dates);
-    if (res.ok) toast.success("Jours libérés.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Jours libérés.");
+      rafraichirDashboard();
+    } else toast.error(res.message ?? "Erreur.");
     fermerPopup();
   }
 
@@ -181,8 +191,10 @@ export function PlanningCalendar({
       tjmAchat,
       tjmVente
     );
-    if (res.ok) toast.success("Tarif du jour mis à jour.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Tarif du jour mis à jour.");
+      rafraichirDashboard();
+    } else toast.error(res.message ?? "Erreur.");
     fermerPopup();
   }
 
@@ -204,6 +216,7 @@ export function PlanningCalendar({
     if (res.ok) {
       toast.success("Encaissement ajouté.");
       setTypeAjout("");
+      rafraichirDashboard();
     } else toast.error(res.message ?? "Erreur.");
   }
   async function ajouterDec(fd: FormData) {
@@ -212,6 +225,7 @@ export function PlanningCalendar({
       toast.success("Décaissement ajouté.");
       setTypeAjout("");
       setFreelanceDecaissementId("");
+      rafraichirDashboard();
     } else toast.error(res.message ?? "Erreur.");
   }
   async function ajouterJal(fd: FormData) {
@@ -219,6 +233,7 @@ export function PlanningCalendar({
     if (res.ok) {
       toast.success("Jalon ajouté.");
       setTypeAjout("");
+      rafraichirDashboard();
     } else toast.error(res.message ?? "Erreur.");
   }
   async function supprimerEv(ev: EvenementProjet) {
@@ -230,8 +245,10 @@ export function PlanningCalendar({
         : ev.type === "decaissement"
           ? await supprimerDecaissement(fd)
           : await supprimerJalon(fd);
-    if (res.ok) toast.success("Événement supprimé.");
-    else toast.error(res.message ?? "Erreur.");
+    if (res.ok) {
+      toast.success("Événement supprimé.");
+      rafraichirDashboard();
+    } else toast.error(res.message ?? "Erreur.");
   }
 
   return (
