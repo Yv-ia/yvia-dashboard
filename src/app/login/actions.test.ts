@@ -32,6 +32,7 @@ vi.mock("@/lib/auth/session", () => ({
   SESSION_COOKIE: "yvia_session",
   pvDepuisHash: vi.fn(async () => "pv-test"),
   signerSession: vi.fn(async () => "token-test"),
+  estRoleValide: (v: unknown) => v === "admin" || v === "user" || v === "commercial",
 }));
 
 vi.mock("@/db", () => ({

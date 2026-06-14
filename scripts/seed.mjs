@@ -19,16 +19,26 @@ function hasher(mdp) {
   return `scrypt$${sel.toString("hex")}$${hash.toString("hex")}`;
 }
 
+// Compte commercial de démonstration (rôle restreint : pipeline, sans marges).
+const emailCommercial = (process.env.SEED_COMMERCIAL_EMAIL ?? "commercial@yvia.io").toLowerCase();
+const motDePasseCommercial = process.env.SEED_COMMERCIAL_PASSWORD ?? "commercial";
+const nomCommercial = process.env.SEED_COMMERCIAL_NOM ?? "Commercial";
+
 const sql = createSqlClient();
 try {
   await sql`
-    INSERT INTO users (email, password_hash, nom)
-    VALUES (${email}, ${hasher(motDePasse)}, ${nom})
+    INSERT INTO users (email, password_hash, nom, role)
+    VALUES (${email}, ${hasher(motDePasse)}, ${nom}, 'admin')
     ON CONFLICT (email) DO UPDATE
-      SET password_hash = EXCLUDED.password_hash, nom = EXCLUDED.nom`;
-  console.log("Compte admin créé / réinitialisé :");
-  console.log(`  Email        : ${email}`);
-  console.log(`  Mot de passe : ${motDePasse}`);
+      SET password_hash = EXCLUDED.password_hash, nom = EXCLUDED.nom, role = EXCLUDED.role`;
+  await sql`
+    INSERT INTO users (email, password_hash, nom, role)
+    VALUES (${emailCommercial}, ${hasher(motDePasseCommercial)}, ${nomCommercial}, 'commercial')
+    ON CONFLICT (email) DO UPDATE
+      SET password_hash = EXCLUDED.password_hash, nom = EXCLUDED.nom, role = EXCLUDED.role`;
+  console.log("Comptes créés / réinitialisés :");
+  console.log(`  Admin       : ${email} / ${motDePasse}`);
+  console.log(`  Commercial  : ${emailCommercial} / ${motDePasseCommercial}`);
   console.log("Connecte-toi sur la page /login.");
 } finally {
   await sql.end();
