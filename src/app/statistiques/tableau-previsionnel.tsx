@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { formatEuro, formatJours, formatMois } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { classeMarge } from "./montants";
 import { lignesDetailMois, type DetailsPrevisionnel, type LignePrevisionnel } from "./pilotage-calculs";
 
 export function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] }) {
@@ -70,14 +71,14 @@ export function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] })
                 </TableCell>
                 <TableCell className="text-right">{formatEuro(l.caMax)}</TableCell>
                 <TableCell className="text-right">{formatEuro(l.caProb)}</TableCell>
-                <TableCell className="text-right text-rose-600">{formatEuro(l.charges)}</TableCell>
-                <TableCell className={`text-right ${l.margeMax < 0 ? "text-rose-600" : ""}`}>
+                <TableCell className="text-right">{formatEuro(l.charges)}</TableCell>
+                <TableCell className={classeMarge(l.margeMax)}>
                   {formatEuro(l.margeMax)}
                 </TableCell>
-                <TableCell className={`text-right ${l.margeProb < 0 ? "text-rose-600" : ""}`}>
+                <TableCell className={classeMarge(l.margeProb)}>
                   {formatEuro(l.margeProb)}
                 </TableCell>
-                <TableCell className={`text-right font-medium ${l.cumulProb < 0 ? "text-rose-600" : ""}`}>
+                <TableCell className={classeMarge(l.cumulProb, "font-medium")}>
                   {formatEuro(l.cumulProb)}
                 </TableCell>
               </TableRow>
@@ -98,13 +99,13 @@ export function TableauPrevisionnel({ lignes }: { lignes: LignePrevisionnel[] })
           <TableCell className="text-right">{formatEuro(total.caMax)}</TableCell>
           <TableCell className="text-right">{formatEuro(total.caProb)}</TableCell>
           <TableCell className="text-right">{formatEuro(total.charges)}</TableCell>
-          <TableCell className={`text-right ${total.margeMax < 0 ? "text-rose-600" : ""}`}>
+          <TableCell className={classeMarge(total.margeMax)}>
             {formatEuro(total.margeMax)}
           </TableCell>
-          <TableCell className={`text-right ${total.margeProb < 0 ? "text-rose-600" : ""}`}>
+          <TableCell className={classeMarge(total.margeProb)}>
             {formatEuro(total.margeProb)}
           </TableCell>
-          <TableCell className={`text-right ${total.cumulProb < 0 ? "text-rose-600" : ""}`}>
+          <TableCell className={classeMarge(total.cumulProb)}>
             {formatEuro(total.cumulProb)}
           </TableCell>
         </TableRow>
@@ -143,7 +144,7 @@ function DetailsMois({ details }: { details: DetailsPrevisionnel }) {
               <TableCell className="text-right">
                 {l.jours !== null ? formatJours(l.jours) : "-"}
               </TableCell>
-              <TableCell className="text-right">{formatEuro(l.marge)}</TableCell>
+              <TableCell className={classeMarge(l.marge)}>{formatEuro(l.marge)}</TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -152,7 +153,7 @@ function DetailsMois({ details }: { details: DetailsPrevisionnel }) {
             <TableCell colSpan={6} className="font-medium">
               Total
             </TableCell>
-            <TableCell className="text-right font-medium">{formatEuro(totalMarge)}</TableCell>
+            <TableCell className={classeMarge(totalMarge, "font-medium")}>{formatEuro(totalMarge)}</TableCell>
           </TableRow>
         </TableFooter>
       </Table>

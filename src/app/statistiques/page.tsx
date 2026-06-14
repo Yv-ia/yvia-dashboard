@@ -22,11 +22,13 @@ import {
 import { formatEuro, formatPourcent, formatMois } from "@/lib/format";
 import { premierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { exigerSession } from "@/lib/auth/server";
+import { cn } from "@/lib/utils";
 import {
   calculerPilotageMensuel,
   type LignePrevisionnel,
   type LigneRealise,
 } from "./pilotage-calculs";
+import { classeMarge, couleurMarge } from "./montants";
 import { TableauPrevisionnel } from "./tableau-previsionnel";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -211,9 +213,17 @@ export default async function PageStatistiques() {
     <div className="space-y-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Indicateur titre="CA encaissé" valeur={formatEuro(totalRealise.ca)} />
-        <Indicateur titre="Marge réalisée" valeur={formatEuro(totalRealise.marge)} />
+        <Indicateur
+          titre="Marge réalisée"
+          valeur={formatEuro(totalRealise.marge)}
+          className={couleurMarge(totalRealise.marge)}
+        />
         <Indicateur titre="CA probable" valeur={formatEuro(totalPrevisionnel.caProb)} />
-        <Indicateur titre="Marge probable cumulée" valeur={formatEuro(totalPrevisionnel.cumulProb)} />
+        <Indicateur
+          titre="Marge probable cumulée"
+          valeur={formatEuro(totalPrevisionnel.cumulProb)}
+          className={couleurMarge(totalPrevisionnel.cumulProb)}
+        />
       </div>
 
       <Card>
@@ -316,8 +326,8 @@ function TableauRealise({ lignes }: { lignes: LigneRealise[] }) {
           <TableRow key={l.cle}>
             <TableCell className="font-medium capitalize">{formatMois(l.annee, l.mois)}</TableCell>
             <TableCell className="text-right">{formatEuro(l.ca)}</TableCell>
-            <TableCell className="text-right text-rose-600">{formatEuro(l.cout)}</TableCell>
-            <TableCell className={`text-right ${l.marge < 0 ? "text-rose-600" : ""}`}>
+            <TableCell className="text-right">{formatEuro(l.cout)}</TableCell>
+            <TableCell className={classeMarge(l.marge)}>
               {formatEuro(l.marge)}
             </TableCell>
             <TableCell className="text-right">{formatPourcent(l.taux)}</TableCell>
@@ -329,7 +339,7 @@ function TableauRealise({ lignes }: { lignes: LigneRealise[] }) {
           <TableCell>Total</TableCell>
           <TableCell className="text-right">{formatEuro(total.ca)}</TableCell>
           <TableCell className="text-right">{formatEuro(total.cout)}</TableCell>
-          <TableCell className={`text-right ${total.marge < 0 ? "text-rose-600" : ""}`}>
+          <TableCell className={classeMarge(total.marge)}>
             {formatEuro(total.marge)}
           </TableCell>
           <TableCell className="text-right">{formatPourcent(total.taux)}</TableCell>
@@ -339,14 +349,22 @@ function TableauRealise({ lignes }: { lignes: LigneRealise[] }) {
   );
 }
 
-function Indicateur({ titre, valeur }: { titre: string; valeur: string }) {
+function Indicateur({
+  titre,
+  valeur,
+  className,
+}: {
+  titre: string;
+  valeur: string;
+  className?: string;
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-xs font-normal text-muted-foreground">{titre}</CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="font-display text-2xl">{valeur}</p>
+        <p className={cn("font-display text-2xl", className)}>{valeur}</p>
       </CardContent>
     </Card>
   );
