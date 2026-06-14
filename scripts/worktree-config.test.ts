@@ -15,4 +15,12 @@ describe("configuration multi-worktree", () => {
     expect(settings).toContain('run = "npm run dev"');
     expect(settings).toContain('run_mode = "concurrent"');
   });
+
+  it("branche Hecaton sur la base isolée du workspace", () => {
+    const hecaton = JSON.parse(readFileSync("hecaton.json", "utf8"));
+
+    expect(hecaton.env.DATABASE_URL).toBe("${HECATON_DATABASE_URL}");
+    expect(hecaton.env.DATABASE_URL_UNPOOLED).toBe("${HECATON_DATABASE_URL}");
+    expect(hecaton.env.NODE_ENV).toBe("development");
+  });
 });
