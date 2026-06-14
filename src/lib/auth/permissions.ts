@@ -35,7 +35,8 @@ export function peutEditerDelivery(session: AvecRole): boolean {
 // le commercial par liste blanche (sûr par construction).
 
 // Préfixes de routes accessibles au commercial (au-delà des pages publiques).
-const ROUTES_COMMERCIAL = ["/clients", "/parametres"];
+// Le pipeline d'opportunités fait partie de son périmètre (aucune marge exposée).
+const ROUTES_COMMERCIAL = ["/clients", "/parametres", "/opportunites"];
 
 export function peutAccederRoute(session: AvecRole, pathname: string): boolean {
   if (role(session) !== "commercial") return true; // admin / user : tout

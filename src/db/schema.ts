@@ -155,6 +155,31 @@ export const encaissements = pgTable("encaissements", {
   fiabilite: text("fiabilite"),
 });
 
+// --- OPPORTUNITES (pipeline commercial, alias « sujets ») ---
+// Une opportunité = un sujet commercial suivi dans un Kanban (par statut). Son
+// `type` distingue un forfait (ponctuel → projet à la signature) d'un récurrent
+// (revenu mensuel récurrent, cf. lot suivant). Gagnée, elle est convertie en
+// l'entité cible et reliée via projetId (forfait).
+export const opportunites = pgTable("opportunites", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clients.id),
+  nom: text("nom").notNull(),
+  // 'forfait' (ponctuel) | 'recurrent' (MRR). Défaut 'forfait'.
+  type: text("type").notNull().default("forfait"),
+  // Étape du pipeline : réutilise les statuts commerciaux des projets
+  // (a_qualifier → en_discussion → proposition_envoyee → gagne / perdu).
+  statut: text("statut").notNull().default("a_qualifier"),
+  // Montant de vente estimé (€ HT), optionnel. Repris en budget à la conversion.
+  montantEstime: numeric("montant_estime", { precision: 12, scale: 2 }),
+  // Position dans la colonne du Kanban (drag & drop).
+  ordre: integer("ordre").notNull().default(0),
+  // Entité créée lors de la conversion (forfait gagné → projet).
+  projetId: integer("projet_id").references(() => projets.id),
+  actif: boolean("actif").notNull().default(true),
+});
+
 // --- DECAISSEMENTS / ÉCHÉANCIER DE COÛT (versé à un freelance, rattaché à un projet) ---
 // statut='decaisse' = déjà versé (réalisé), statut='prevu' = coût à venir.
 // Pas de fiabilité côté coût : un coût engagé est considéré certain (100 %).

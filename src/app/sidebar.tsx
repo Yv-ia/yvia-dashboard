@@ -16,6 +16,7 @@ import {
   LayoutDashboard,
   Briefcase,
   FolderKanban,
+  Target,
   Users,
   UserCog,
   Building2,
@@ -42,6 +43,7 @@ const SECTIONS: Section[] = [
   {
     titre: "Activité",
     liens: [
+      { href: "/opportunites", label: "Opportunités", icone: Target },
       { href: "/missions", label: "Missions", icone: Briefcase },
       { href: "/projets", label: "Projets", icone: FolderKanban },
     ],
