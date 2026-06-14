@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Briefcase, Users, Wallet, Flag, ArrowRight, type LucideIcon } from "lucide-react";
 import { db } from "@/db";
 import {
   missions,
@@ -13,7 +13,6 @@ import {
 } from "@/db/schema";
 import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -23,37 +22,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { estJourFerie } from "@/lib/calculs/jours-feries";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
-import { formatEuro, formatPourcent, formatJours, formatMois } from "@/lib/format";
-import { PlanningCalendar, type Couleur, type LigneFreelance, type Jour } from "./planning-calendar";
-import { EtendreMoisButton } from "./etendre-mois-button";
+import { formatEuro, formatPourcent, formatJours, formatDate } from "@/lib/format";
+import { NavigationMois } from "./navigation-mois";
 import { EntityLink } from "./_drawer/drawer-stack";
+import type { TypeEntite } from "./_drawer/types";
 import { exigerSession } from "@/lib/auth/server";
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
-const moisSuivant = (a: number, m: number) =>
-  m === 12 ? { annee: a + 1, mois: 1 } : { annee: a, mois: m + 1 };
-const moisPrecedent = (a: number, m: number) =>
-  m === 1 ? { annee: a - 1, mois: 12 } : { annee: a, mois: m - 1 };
-
-// Palette pour distinguer les missions dans le planning.
-// Tons désaturés et cohérents avec la DA Yvia (dominante froide), assez
-// différents les uns des autres pour ne pas confondre deux missions voisines.
-const PALETTE: Couleur[] = [
-  { bg: "#0571ed", fg: "#ffffff" }, // bleu Yvia
-  { bg: "#0b172b", fg: "#ffffff" }, // navy
-  { bg: "#2e8b8b", fg: "#ffffff" }, // sarcelle
-  { bg: "#52698f", fg: "#ffffff" }, // ardoise
-  { bg: "#5b6fb0", fg: "#ffffff" }, // bleu-violet
-  { bg: "#5a8f6b", fg: "#ffffff" }, // vert-de-gris
-  { bg: "#7a5f99", fg: "#ffffff" }, // prune doux
-  { bg: "#b07d3c", fg: "#ffffff" }, // ocre doux
-];
-
-const LETTRES = ["D", "L", "M", "M", "J", "V", "S"];
-
-export default async function PagePlanning({
+export default async function PageDashboard({
   searchParams,
 }: {
   searchParams: Promise<{ annee?: string; mois?: string }>;
@@ -66,243 +42,133 @@ export default async function PagePlanning({
   const moisParam = Number(params.mois);
   const mois = moisParam >= 1 && moisParam <= 12 ? moisParam : maintenant.getUTCMonth() + 1;
 
-  const suivant = moisSuivant(annee, mois);
-  const precedent = moisPrecedent(annee, mois);
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
 
-  // Jours du mois (avec week-ends, jours fériés, et repérage d'aujourd'hui).
-  const aujourdhuiISO = maintenant.toISOString().slice(0, 10);
-  const nbJours = Number(finMois.slice(8, 10));
-  const jours: Jour[] = [];
-  for (let d = 1; d <= nbJours; d++) {
-    const date = `${annee}-${pad2(mois)}-${pad2(d)}`;
-    const dow = new Date(date + "T00:00:00Z").getUTCDay();
-    jours.push({
-      date,
-      num: d,
-      lettre: LETTRES[dow],
-      weekend: dow === 0 || dow === 6,
-      ferie: estJourFerie(date),
-      estAujourdhui: date === aujourdhuiISO,
-    });
-  }
-
-  // Données.
-  const [
-    freelancesActifs,
-    clientsActifs,
-    missionsDispo,
-    affs,
-    projetsActifs,
-    encMois,
-    decMois,
-    jalMois,
-  ] = await Promise.all([
-    db
-      .select({
-        id: freelances.id,
-        prenom: freelances.prenom,
-        nom: freelances.nom,
-        afficherPlanning: freelances.afficherPlanning,
-      })
-      .from(freelances)
-      .where(eq(freelances.actif, true))
-      .orderBy(freelances.nom),
-    db
-      .select({ id: clients.id, nom: clients.nom })
-      .from(clients)
-      .where(eq(clients.actif, true))
-      .orderBy(clients.nom),
-    db
-      .select({
-        id: missions.id,
-        nom: missions.nom,
-        freelanceId: missions.freelanceId,
-        clientNom: clients.nom,
-      })
-      .from(missions)
-      .innerJoin(clients, eq(missions.clientId, clients.id))
-      .where(eq(missions.actif, true)),
-    db
-      .select({
-        freelanceId: affectations.freelanceId,
-        date: affectations.date,
-        missionId: affectations.missionId,
-        missionNom: missions.nom,
-        tjmAchat: affectations.tjmAchat,
-        tjmVente: affectations.tjmVente,
-        clientNom: clients.nom,
-        prenom: freelances.prenom,
-        nom: freelances.nom,
-      })
-      .from(affectations)
-      .innerJoin(missions, eq(affectations.missionId, missions.id))
-      .innerJoin(clients, eq(missions.clientId, clients.id))
-      .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
-      .where(and(gte(affectations.date, debutMois), lte(affectations.date, finMois))),
-    db
-      .select({ id: projets.id, nom: projets.nom, clientNom: clients.nom, budget: projets.budget })
-      .from(projets)
-      .innerJoin(clients, eq(projets.clientId, clients.id))
-      .where(and(eq(projets.actif, true), ne(projets.statutCommercial, "perdu")))
-      .orderBy(projets.nom),
-    db
-      .select({
-        id: encaissements.id,
-        projetId: encaissements.projetId,
-        date: encaissements.date,
-        montant: encaissements.montant,
-        libelle: encaissements.libelle,
-      })
-      .from(encaissements)
-      .innerJoin(projets, eq(encaissements.projetId, projets.id))
-      .where(
-        and(
-          eq(encaissements.statut, "encaisse"), // réalisé uniquement (le prévu ne compte pas comme CA)
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(encaissements.date, debutMois),
-          lte(encaissements.date, finMois)
+  // Données du mois affiché.
+  const [affs, encMois, decMois, freelancesActifs, missionsActives, encPrevus, jalMois] =
+    await Promise.all([
+      db
+        .select({
+          freelanceId: affectations.freelanceId,
+          missionId: affectations.missionId,
+          missionNom: missions.nom,
+          tjmAchat: affectations.tjmAchat,
+          tjmVente: affectations.tjmVente,
+          clientNom: clients.nom,
+          prenom: freelances.prenom,
+          nom: freelances.nom,
+        })
+        .from(affectations)
+        .innerJoin(missions, eq(affectations.missionId, missions.id))
+        .innerJoin(clients, eq(missions.clientId, clients.id))
+        .innerJoin(freelances, eq(affectations.freelanceId, freelances.id))
+        .where(and(gte(affectations.date, debutMois), lte(affectations.date, finMois))),
+      db
+        .select({
+          projetId: encaissements.projetId,
+          projetNom: projets.nom,
+          clientNom: clients.nom,
+          montant: encaissements.montant,
+        })
+        .from(encaissements)
+        .innerJoin(projets, eq(encaissements.projetId, projets.id))
+        .innerJoin(clients, eq(projets.clientId, clients.id))
+        .where(
+          and(
+            eq(encaissements.statut, "encaisse"), // réalisé uniquement (le prévu ne compte pas comme CA)
+            eq(projets.actif, true),
+            ne(projets.statutCommercial, "perdu"),
+            gte(encaissements.date, debutMois),
+            lte(encaissements.date, finMois)
+          )
+        ),
+      db
+        .select({
+          projetId: decaissements.projetId,
+          projetNom: projets.nom,
+          clientNom: clients.nom,
+          montant: decaissements.montant,
+        })
+        .from(decaissements)
+        .innerJoin(projets, eq(decaissements.projetId, projets.id))
+        .where(
+          and(
+            eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
+            eq(projets.actif, true),
+            ne(projets.statutCommercial, "perdu"),
+            gte(decaissements.date, debutMois),
+            lte(decaissements.date, finMois)
+          )
+        ),
+      // --- Données des encarts d'alerte ---
+      db
+        .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
+        .from(freelances)
+        .where(eq(freelances.actif, true))
+        .orderBy(freelances.nom),
+      db
+        .select({
+          id: missions.id,
+          nom: missions.nom,
+          freelancePrenom: freelances.prenom,
+          freelanceNom: freelances.nom,
+          clientNom: clients.nom,
+        })
+        .from(missions)
+        .innerJoin(clients, eq(missions.clientId, clients.id))
+        .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
+        .where(eq(missions.actif, true))
+        .orderBy(missions.nom),
+      db
+        .select({
+          id: encaissements.id,
+          projetId: encaissements.projetId,
+          projetNom: projets.nom,
+          clientNom: clients.nom,
+          date: encaissements.date,
+          montant: encaissements.montant,
+          libelle: encaissements.libelle,
+        })
+        .from(encaissements)
+        .innerJoin(projets, eq(encaissements.projetId, projets.id))
+        .innerJoin(clients, eq(projets.clientId, clients.id))
+        .where(
+          and(
+            eq(encaissements.statut, "prevu"), // attendu, pas encore reçu : à suivre
+            eq(projets.actif, true),
+            ne(projets.statutCommercial, "perdu"),
+            gte(encaissements.date, debutMois),
+            lte(encaissements.date, finMois)
+          )
         )
-      ),
-    db
-      .select({
-        id: decaissements.id,
-        projetId: decaissements.projetId,
-        date: decaissements.date,
-        montant: decaissements.montant,
-        libelle: decaissements.libelle,
-        prenom: freelances.prenom,
-        nom: freelances.nom,
-      })
-      .from(decaissements)
-      .innerJoin(projets, eq(decaissements.projetId, projets.id))
-      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
-      .where(
-        and(
-          eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(decaissements.date, debutMois),
-          lte(decaissements.date, finMois)
+        .orderBy(encaissements.date),
+      db
+        .select({
+          id: jalons.id,
+          projetId: jalons.projetId,
+          projetNom: projets.nom,
+          date: jalons.date,
+          libelle: jalons.libelle,
+        })
+        .from(jalons)
+        .innerJoin(projets, eq(jalons.projetId, projets.id))
+        .where(
+          and(
+            eq(projets.actif, true),
+            ne(projets.statutCommercial, "perdu"),
+            gte(jalons.date, debutMois),
+            lte(jalons.date, finMois)
+          )
         )
-      ),
-    db
-      .select({
-        id: jalons.id,
-        projetId: jalons.projetId,
-        date: jalons.date,
-        libelle: jalons.libelle,
-      })
-      .from(jalons)
-      .innerJoin(projets, eq(jalons.projetId, projets.id))
-      .where(
-        and(
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(jalons.date, debutMois),
-          lte(jalons.date, finMois)
-        )
-      ),
-  ]);
+        .orderBy(jalons.date),
+    ]);
 
-  // Événements regroupés par projet puis par date.
-  type EvenementProjet = {
-    id: number;
-    type: "encaissement" | "decaissement" | "jalon";
-    montant: string | null; // null pour un jalon (pas de montant)
-    libelle: string | null;
-    freelanceNom: string | null;
-  };
-  const evenementsParProjet = new Map<number, Record<string, EvenementProjet[]>>();
-  const ajouterEvenement = (
-    projetId: number,
-    date: string,
-    ev: EvenementProjet
-  ) => {
-    const parDate = evenementsParProjet.get(projetId) ?? {};
-    parDate[date] = [...(parDate[date] ?? []), ev];
-    evenementsParProjet.set(projetId, parDate);
-  };
-  for (const e of encMois)
-    ajouterEvenement(e.projetId, e.date, {
-      id: e.id,
-      type: "encaissement",
-      montant: e.montant,
-      libelle: e.libelle,
-      freelanceNom: null,
-    });
-  for (const d of decMois)
-    ajouterEvenement(d.projetId, d.date, {
-      id: d.id,
-      type: "decaissement",
-      montant: d.montant,
-      libelle: d.libelle,
-      freelanceNom: `${d.prenom} ${d.nom}`,
-    });
-  for (const j of jalMois)
-    ajouterEvenement(j.projetId, j.date, {
-      id: j.id,
-      type: "jalon",
-      montant: null,
-      libelle: j.libelle,
-      freelanceNom: null,
-    });
-
-  const projetsLignes = projetsActifs.map((p) => ({
-    id: p.id,
-    nom: p.nom,
-    clientNom: p.clientNom,
-    budget: p.budget,
-    evenements: evenementsParProjet.get(p.id) ?? {},
-  }));
-
-  // CA / coût du mois apportés par les forfaits (événements datés ce mois).
+  // CA / coût du mois apportés par les forfaits (encaissements / décaissements réalisés).
   const caForfait = encMois.reduce((s, e) => s + Number(e.montant), 0);
   const coutForfait = decMois.reduce((s, d) => s + Number(d.montant), 0);
 
-  // Couleur stable par mission.
-  const idsMissions = Array.from(
-    new Set([...missionsDispo.map((m) => m.id), ...affs.map((a) => a.missionId)])
-  ).sort((a, b) => a - b);
-  const couleurDe = (missionId: number): Couleur =>
-    PALETTE[idsMissions.indexOf(missionId) % PALETTE.length];
-
-  // Lignes de la grille (une par freelance actif affiché dans le planning).
-  // Les freelances masqués gardent leurs sélecteurs, affectations et montants :
-  // seule la ligne du calendrier disparaît.
-  const lignes: LigneFreelance[] = freelancesActifs
-    .filter((f) => f.afficherPlanning)
-    .map((f) => {
-      const cellules: LigneFreelance["cellules"] = {};
-      for (const a of affs) {
-        if (a.freelanceId === f.id) {
-          cellules[a.date] = {
-            missionNom: a.missionNom,
-            clientNom: a.clientNom,
-            couleur: couleurDe(a.missionId),
-            tjmAchat: a.tjmAchat,
-            tjmVente: a.tjmVente,
-          };
-        }
-      }
-      return {
-        id: f.id,
-        nom: `${f.prenom} ${f.nom}`,
-        missions: missionsDispo
-          .filter((m) => m.freelanceId === f.id)
-          .map((m) => ({
-            id: m.id,
-            nom: m.nom,
-            clientNom: m.clientNom,
-            couleur: couleurDe(m.id),
-          })),
-        cellules,
-      };
-    });
-
-  // Indicateurs : chaque jour affecté porte son propre TJM (figé à la pose).
+  // Indicateurs régie : chaque jour affecté porte son propre TJM (figé à la pose).
   const parMission = new Map<
     number,
     {
@@ -313,8 +179,6 @@ export default async function PagePlanning({
       jours: number;
       ca: number;
       cout: number;
-      tjmAchat: number;
-      tjmVente: number;
     }
   >();
   for (const a of affs) {
@@ -327,15 +191,10 @@ export default async function PagePlanning({
         jours: 0,
         ca: 0,
         cout: 0,
-        tjmAchat: Number(a.tjmAchat),
-        tjmVente: Number(a.tjmVente),
       };
     e.jours += 1;
     e.ca += Number(a.tjmVente);
     e.cout += Number(a.tjmAchat);
-    // TJM affiché : celui du dernier jour rencontré dans le mois.
-    e.tjmAchat = Number(a.tjmAchat);
-    e.tjmVente = Number(a.tjmVente);
     parMission.set(a.missionId, e);
   }
 
@@ -378,86 +237,45 @@ export default async function PagePlanning({
   }));
 
   // Agrégation des flux forfait par projet sur le mois affiché.
-  const projAgg = new Map<number, { enc: number; dec: number }>();
+  const projAgg = new Map<
+    number,
+    { nom: string; clientNom: string; enc: number; dec: number }
+  >();
   for (const e of encMois) {
-    const a = projAgg.get(e.projetId) ?? { enc: 0, dec: 0 };
+    const a =
+      projAgg.get(e.projetId) ?? { nom: e.projetNom, clientNom: e.clientNom, enc: 0, dec: 0 };
     a.enc += Number(e.montant);
     projAgg.set(e.projetId, a);
   }
   for (const d of decMois) {
-    const a = projAgg.get(d.projetId) ?? { enc: 0, dec: 0 };
+    const a =
+      projAgg.get(d.projetId) ?? { nom: d.projetNom, clientNom: d.clientNom, enc: 0, dec: 0 };
     a.dec += Number(d.montant);
     projAgg.set(d.projetId, a);
   }
-  const detailProjets: LigneDetail[] = projetsActifs
-    .filter((p) => projAgg.has(p.id))
-    .map((p) => {
-      const a = projAgg.get(p.id)!;
-      return {
-        cle: `p${p.id}`,
-        libelle: p.nom,
-        freelanceNom: null, // pas de freelance unique sur un forfait
-        clientNom: p.clientNom,
-        encaissements: arrondi(a.enc),
-        decaissements: arrondi(a.dec),
-        jours: null, // notion propre à la régie
-        marge: arrondi(a.enc - a.dec),
-      };
-    });
+  const detailProjets: LigneDetail[] = Array.from(projAgg.entries()).map(([projetId, a]) => ({
+    cle: `p${projetId}`,
+    libelle: a.nom,
+    freelanceNom: null, // pas de freelance unique sur un forfait
+    clientNom: a.clientNom,
+    encaissements: arrondi(a.enc),
+    decaissements: arrondi(a.dec),
+    jours: null, // notion propre à la régie
+    marge: arrondi(a.enc - a.dec),
+  }));
   const detailLignes = [...detailMissions, ...detailProjets];
-  const planningCalendarKey = [
-    `${annee}-${mois}`,
-    freelancesActifs
-      .map((f) => `${f.id}:${f.prenom}:${f.nom}:${f.afficherPlanning}`)
-      .sort()
-      .join("|"),
-    missionsDispo
-      .map((m) => `${m.id}:${m.freelanceId}:${m.nom}:${m.clientNom}`)
-      .sort()
-      .join("|"),
-    affs
-      .map(
-        (a) =>
-          `${a.freelanceId}:${a.date}:${a.missionId}:${a.missionNom}:${a.clientNom}:${a.tjmAchat}:${a.tjmVente}`
-      )
-      .sort()
-      .join("|"),
-  ].join(";");
+
+  // --- Encarts d'alerte (tout est cadré sur le mois affiché) ---
+  const missionsAvecJours = new Set(affs.map((a) => a.missionId));
+  const freelancesAvecJours = new Set(affs.map((a) => a.freelanceId));
+  const missionsAStaffer = missionsActives.filter((m) => !missionsAvecJours.has(m.id));
+  const freelancesNonStaffes = freelancesActifs.filter((f) => !freelancesAvecJours.has(f.id));
+  const totalEncPrevus = encPrevus.reduce((s, e) => s + Number(e.montant), 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-end">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon-sm"
-            nativeButton={false}
-            render={
-              <Link
-                href={`/?annee=${precedent.annee}&mois=${precedent.mois}`}
-                aria-label="Mois précédent"
-              >
-                <ChevronLeft />
-              </Link>
-            }
-          />
-          <span className="min-w-28 text-center text-sm font-medium capitalize">
-            {formatMois(annee, mois)}
-          </span>
-          <Button
-            variant="outline"
-            size="icon-sm"
-            nativeButton={false}
-            render={
-              <Link
-                href={`/?annee=${suivant.annee}&mois=${suivant.mois}`}
-                aria-label="Mois suivant"
-              >
-                <ChevronRight />
-              </Link>
-            }
-          />
-        </div>
+        <NavigationMois basePath="/" annee={annee} mois={mois} />
       </div>
 
       {/* Indicateurs du mois affiché */}
@@ -468,35 +286,79 @@ export default async function PagePlanning({
         <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
       </div>
 
-      {freelancesActifs.length === 0 ? (
-        <Card>
-          <CardContent className="py-6 text-sm text-muted-foreground">
-            Ajoutez des freelances et des missions pour commencer à planifier.
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {/* Action, juste au-dessus du calendrier */}
-          <div className="flex items-center justify-end">
-            <EtendreMoisButton
-              annee={annee}
-              mois={mois}
-              libelleMoisSuivant={formatMois(suivant.annee, suivant.mois)}
-            />
-          </div>
+      {/* Points d'attention : ce qu'il reste à traiter sur le mois */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <EncartAlerte
+          icone={Briefcase}
+          titre="Missions à staffer"
+          sousTitre="aucun jour posé ce mois"
+          compte={missionsAStaffer.length}
+          lienHref="/planning"
+          lienLabel="Ouvrir le planning"
+          videLabel="Toutes les missions sont planifiées."
+          items={missionsAStaffer.slice(0, 4).map((m) => ({
+            cle: `m${m.id}`,
+            type: "mission" as TypeEntite,
+            id: m.id,
+            principal: m.nom,
+            secondaire: `${m.freelancePrenom} ${m.freelanceNom} · ${m.clientNom}`,
+          }))}
+          reste={missionsAStaffer.length - Math.min(missionsAStaffer.length, 4)}
+        />
+        <EncartAlerte
+          icone={Users}
+          titre="Freelances non staffés"
+          sousTitre="aucune affectation ce mois"
+          compte={freelancesNonStaffes.length}
+          lienHref="/planning"
+          lienLabel="Ouvrir le planning"
+          videLabel="Tous les freelances actifs sont staffés."
+          items={freelancesNonStaffes.slice(0, 4).map((f) => ({
+            cle: `f${f.id}`,
+            type: "freelance" as TypeEntite,
+            id: f.id,
+            principal: `${f.prenom} ${f.nom}`,
+            secondaire: null,
+          }))}
+          reste={freelancesNonStaffes.length - Math.min(freelancesNonStaffes.length, 4)}
+        />
+        <EncartAlerte
+          icone={Wallet}
+          titre="Encaissements prévus"
+          sousTitre={`${formatEuro(totalEncPrevus)} attendus ce mois`}
+          compte={encPrevus.length}
+          lienHref="/projets"
+          lienLabel="Voir les projets"
+          videLabel="Aucun encaissement prévu ce mois."
+          items={encPrevus.slice(0, 4).map((e) => ({
+            cle: `e${e.id}`,
+            type: "projet" as TypeEntite,
+            id: e.projetId,
+            principal: e.libelle?.trim() || e.projetNom,
+            secondaire: `${formatDate(e.date)} · ${formatEuro(Number(e.montant))}`,
+          }))}
+          reste={encPrevus.length - Math.min(encPrevus.length, 4)}
+        />
+        <EncartAlerte
+          icone={Flag}
+          titre="Jalons du mois"
+          sousTitre="étapes clés des projets"
+          compte={jalMois.length}
+          lienHref="/planning"
+          lienLabel="Ouvrir le planning"
+          videLabel="Aucun jalon ce mois."
+          items={jalMois.slice(0, 4).map((j) => ({
+            cle: `j${j.id}`,
+            type: "projet" as TypeEntite,
+            id: j.projetId,
+            principal: j.libelle,
+            secondaire: `${formatDate(j.date)} · ${j.projetNom}`,
+          }))}
+          reste={jalMois.length - Math.min(jalMois.length, 4)}
+        />
+      </div>
 
-          <PlanningCalendar
-            key={planningCalendarKey}
-            jours={jours}
-            lignes={lignes}
-            projets={projetsLignes}
-            freelancesActifs={freelancesActifs}
-            clientsActifs={clientsActifs}
-          />
-        </>
-      )}
-
-      {/* Détail par mission */}
+      {/* Détail par mission / projet */}
       <Card>
         <CardHeader>
           <CardTitle>Détail du mois</CardTitle>
@@ -566,6 +428,93 @@ function Indicateur({ titre, valeur }: { titre: string; valeur: string }) {
       </CardHeader>
       <CardContent>
         <p className="font-display text-2xl sm:text-3xl">{valeur}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
+type ItemEncart = {
+  cle: string;
+  type: TypeEntite;
+  id: number;
+  principal: string;
+  secondaire: string | null;
+};
+
+// Carte d'alerte : un compteur, un court extrait cliquable (ouvre le drawer de
+// l'entité) et un lien vers la page d'action. Vide = état positif rassurant.
+function EncartAlerte({
+  icone: Icone,
+  titre,
+  sousTitre,
+  compte,
+  items,
+  reste,
+  lienHref,
+  lienLabel,
+  videLabel,
+}: {
+  icone: LucideIcon;
+  titre: string;
+  sousTitre: string;
+  compte: number;
+  items: ItemEncart[];
+  reste: number;
+  lienHref: string;
+  lienLabel: string;
+  videLabel: string;
+}) {
+  return (
+    <Card className="flex flex-col">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2 text-sm font-medium">
+            <Icone className="size-4 shrink-0 text-muted-foreground" />
+            {titre}
+          </CardTitle>
+          <span
+            className={`inline-flex h-6 min-w-6 items-center justify-center rounded-full px-2 text-xs font-semibold ${
+              compte > 0
+                ? "bg-primary/10 text-primary"
+                : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {compte}
+          </span>
+        </div>
+        <p className="text-xs text-muted-foreground">{sousTitre}</p>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col gap-2">
+        {compte === 0 ? (
+          <p className="text-sm text-muted-foreground">{videLabel}</p>
+        ) : (
+          <>
+            <ul className="space-y-1.5">
+              {items.map((item) => (
+                <li key={item.cle} className="text-sm leading-tight">
+                  <EntityLink type={item.type} id={item.id} className="text-left font-medium hover:text-primary hover:underline">
+                    {item.principal}
+                  </EntityLink>
+                  {item.secondaire ? (
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {item.secondaire}
+                    </span>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+            {reste > 0 ? (
+              <p className="text-xs text-muted-foreground">+{reste} autre{reste > 1 ? "s" : ""}</p>
+            ) : null}
+          </>
+        )}
+        <Link
+          href={lienHref}
+          className="mt-auto inline-flex items-center gap-1 pt-1 text-xs font-medium text-primary hover:underline"
+        >
+          {lienLabel}
+          <ArrowRight className="size-3" />
+        </Link>
       </CardContent>
     </Card>
   );
