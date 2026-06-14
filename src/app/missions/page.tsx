@@ -9,10 +9,13 @@ import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
   Table,
   TableBody,
+  TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
 import { MissionRow } from "./mission-row";
 import { creerMission } from "./actions";
@@ -62,6 +65,12 @@ export default async function PageMissions({
 
   const actives = filtreActif !== "inactives";
   const liste = missionsRows.filter((m) => m.actif === actives);
+  // Marge/jour cumulée du portefeuille affiché (run-rate journalier si chaque
+  // mission facturait un jour). Sommer les TJM eux-mêmes n'aurait pas de sens.
+  const totalMargeJour = liste.reduce(
+    (s, m) => s + (Number(m.tjmVente) - Number(m.tjmAchat)),
+    0
+  );
 
   return (
     <div className="space-y-6">
@@ -121,6 +130,15 @@ export default async function PageMissions({
                   <MissionRow key={mission.id} l={mission} />
                 ))}
               </TableBody>
+              {liste.length > 1 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={5}>Total marge / jour</TableCell>
+                    <TableCell className="text-right">{formatEuro(totalMargeJour)}</TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           )}
         </CardContent>

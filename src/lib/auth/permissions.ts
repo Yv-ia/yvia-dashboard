@@ -17,6 +17,13 @@ export function peutGererUtilisateurs(session: AvecRole): boolean {
   return role(session) === "admin";
 }
 
+// Suppression DÉFINITIVE d'une entité métier (client, freelance, mission,
+// projet) : admin seul. L'archivage/désactivation, lui, reste ouvert à tous
+// (réversible). La suppression est irréversible : on la réserve à l'admin.
+export function peutSupprimerEntites(session: AvecRole): boolean {
+  return role(session) === "admin";
+}
+
 // Voir les coûts d'achat et les marges (TJM achat, décaissements, marge calculée).
 // Masqué au commercial : il pilote la vente, pas la rentabilité interne.
 export function peutVoirMarges(session: AvecRole): boolean {
