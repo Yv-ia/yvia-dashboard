@@ -4,7 +4,7 @@
 // exige seulement d'être connecté (exigerConnecte), pas le droit delivery.
 
 import { db } from "@/db";
-import { opportunites, projets } from "@/db/schema";
+import { opportunites, projets, recurrents } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { exigerConnecte } from "@/lib/auth/garde";
@@ -109,7 +109,8 @@ export async function convertirOpportunite(formData: FormData): Promise<Resultat
 
   const [opp] = await db.select().from(opportunites).where(eq(opportunites.id, id));
   if (!opp) return { ok: false, message: "Opportunité introuvable." };
-  if (opp.projetId) return { ok: false, message: "Opportunité déjà convertie." };
+  if (opp.projetId || opp.recurrentId)
+    return { ok: false, message: "Opportunité déjà convertie." };
 
   const type = normaliserTypeOpportunite(opp.type);
   if (type === "forfait") {
@@ -131,8 +132,23 @@ export async function convertirOpportunite(formData: FormData): Promise<Resultat
     return { ok: true, id: projet.id };
   }
 
-  return {
-    ok: false,
-    message: "La conversion des opportunités récurrentes arrive au lot suivant.",
-  };
+  // Récurrent : on crée un revenu récurrent (catégorie régie par défaut, début
+  // aujourd'hui, en cours). Coût et catégorie s'affinent ensuite côté delivery.
+  const dateDebut = new Date().toISOString().slice(0, 10);
+  const [rec] = await db
+    .insert(recurrents)
+    .values({
+      clientId: opp.clientId,
+      nom: opp.nom,
+      montantRecurrent: opp.montantEstime ?? "0",
+      dateDebut,
+    })
+    .returning({ id: recurrents.id });
+  await db
+    .update(opportunites)
+    .set({ statut: "gagne", recurrentId: rec.id })
+    .where(eq(opportunites.id, id));
+  revalidatePath("/opportunites");
+  revalidatePath("/recurrents");
+  return { ok: true, id: rec.id };
 }

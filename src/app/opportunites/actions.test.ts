@@ -97,14 +97,15 @@ describe("conversion d'une opportunité gagnée", () => {
     expect(enregistre.update[0]).toMatchObject({ statut: "gagne", projetId: 42 });
   });
 
-  it("un récurrent est différé au lot suivant", async () => {
+  it("un récurrent crée un revenu récurrent (montant repris) et relie l'opportunité", async () => {
     selectResult = [
-      { id: 2, clientId: 5, nom: "Maintenance", type: "recurrent", montantEstime: "800", projetId: null },
+      { id: 2, clientId: 5, nom: "Maintenance", type: "recurrent", montantEstime: "800", projetId: null, recurrentId: null },
     ];
     const fd = new FormData();
     fd.set("id", "2");
     const res = await convertirOpportunite(fd);
-    expect(res.ok).toBe(false);
-    expect(enregistre.insert).toHaveLength(0);
+    expect(res.ok).toBe(true);
+    expect(enregistre.insert[0]).toMatchObject({ clientId: 5, nom: "Maintenance", montantRecurrent: "800" });
+    expect(enregistre.update[0]).toMatchObject({ statut: "gagne", recurrentId: 42 });
   });
 });

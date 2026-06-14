@@ -17,6 +17,7 @@ import {
   Briefcase,
   FolderKanban,
   Target,
+  Repeat,
   Users,
   UserCog,
   Building2,
@@ -46,6 +47,7 @@ const SECTIONS: Section[] = [
       { href: "/opportunites", label: "Opportunités", icone: Target },
       { href: "/missions", label: "Missions", icone: Briefcase },
       { href: "/projets", label: "Projets", icone: FolderKanban },
+      { href: "/recurrents", label: "Récurrents", icone: Repeat },
     ],
   },
   {
