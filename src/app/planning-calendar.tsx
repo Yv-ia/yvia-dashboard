@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { ConfirmDialog } from "@/components/confirm-dialog";
 import { formatEuro, formatDate } from "@/lib/format";
 import { ajouterFreelanceLocal, ajouterMissionPlanningLocal } from "@/lib/entity-options";
 import { FreelanceFormDialog } from "./freelances/freelance-form-dialog";
@@ -443,18 +442,9 @@ export function PlanningCalendar({
                 });
               }}
             />
-            <ConfirmDialog
-              trigger={
-                <Button variant="outline" size="sm">
-                  Libérer ces jours
-                </Button>
-              }
-              titre="Libérer ces jours ?"
-              description="Les affectations sélectionnées seront retirées du planning."
-              confirmLabel="Libérer"
-              destructif
-              onConfirm={liberer}
-            />
+            <Button variant="outline" size="sm" onClick={liberer}>
+              Libérer ces jours
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
