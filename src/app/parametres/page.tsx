@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth/server";
-import { estAdmin } from "@/lib/auth/session";
+import { labelRole } from "@/lib/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PasswordForm } from "./password-form";
 
@@ -8,7 +8,6 @@ export default async function PageParametres() {
   const session = await getSession();
   if (!session) redirect("/login");
 
-  const admin = estAdmin(session);
   const nomComplet = [session.prenom, session.nom].filter(Boolean).join(" ");
 
   return (
@@ -32,7 +31,7 @@ export default async function PageParametres() {
           ) : null}
           <p>
             <span className="text-muted-foreground">Rôle : </span>
-            {admin ? "Administrateur" : "Utilisateur"}
+            {labelRole(session.role)}
           </p>
         </CardContent>
       </Card>

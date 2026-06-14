@@ -147,6 +147,7 @@ function DrawerContenu({
                   label={champ.label}
                   valeur={champ.valeur}
                   type={champ.type}
+                  options={champ.options}
                   onSave={(v) => sauverChamp(champ.cle, v)}
                 />
               ))}

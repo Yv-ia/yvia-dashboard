@@ -2,6 +2,7 @@
 
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useDrawer } from "@/app/_drawer/drawer-stack";
+import { labelRole } from "@/lib/auth/permissions";
 import { DeleteUserForm } from "./delete-user-form";
 import type { Resultat } from "./actions";
 
@@ -31,7 +32,7 @@ export function UserRow({
         {nomComplet || utilisateur.nom || utilisateur.email}
       </TableCell>
       <TableCell className="text-muted-foreground">{utilisateur.email}</TableCell>
-      <TableCell>{utilisateur.role === "user" ? "Utilisateur" : "Administrateur"}</TableCell>
+      <TableCell>{labelRole(utilisateur.role)}</TableCell>
       <TableCell onClick={(event) => event.stopPropagation()}>
         <div className="flex justify-end">
           <DeleteUserForm

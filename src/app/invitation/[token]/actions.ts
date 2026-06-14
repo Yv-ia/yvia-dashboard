@@ -5,7 +5,13 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { users, invitations } from "@/db/schema";
 import { hasherMotDePasse } from "@/lib/auth/password";
-import { signerSession, pvDepuisHash, SESSION_COOKIE, DUREE_SESSION_MS } from "@/lib/auth/session";
+import {
+  signerSession,
+  pvDepuisHash,
+  estRoleValide,
+  SESSION_COOKIE,
+  DUREE_SESSION_MS,
+} from "@/lib/auth/session";
 import { reinitialiserLimite, verifierLimite } from "@/lib/auth/rate-limit";
 
 export type Resultat = { ok: boolean; message?: string };
@@ -34,7 +40,7 @@ export async function accepterInvitation(formData: FormData): Promise<Resultat> 
   if (existant) return { ok: false, message: "Un compte existe déjà pour cet email." };
 
   const passwordHash = hasherMotDePasse(motDePasse);
-  const role = inv.role === "admin" ? "admin" : "user";
+  const role = estRoleValide(inv.role) ? inv.role : "user";
   const [u] = await db
     .insert(users)
     .values({

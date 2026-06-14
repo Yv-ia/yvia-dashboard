@@ -17,10 +17,12 @@ import {
 } from "@/db/schema";
 import { getSession } from "@/lib/auth/server";
 import { estAdmin } from "@/lib/auth/session";
+import { labelRole, peutVoirMarges } from "@/lib/auth/permissions";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculMissionRealisee } from "@/lib/calculs/marge";
 import { formatEuro, formatJours } from "@/lib/format";
 import { labelStatutCommercial, normaliserStatutCommercial } from "@/lib/projets/statut-commercial";
+import { STATUTS_CLIENT, normaliserStatutClient } from "@/lib/clients/statut";
 import type { DetailEntite, EntiteRef } from "./types";
 
 const arrondi = (n: number) => Math.round(n * 100) / 100;
@@ -37,6 +39,10 @@ function moisCourant() {
 export async function chargerEntite(ref: EntiteRef): Promise<DetailEntite | null> {
   const session = await getSession();
   if (!session) return null;
+
+  // Le commercial n'accède qu'au détail client : les autres entités exposent
+  // des coûts/marges (TJM achat, décaissements, marge).
+  if (!peutVoirMarges(session) && ref.type !== "client") return null;
 
   switch (ref.type) {
     case "freelance":
@@ -73,7 +79,7 @@ async function chargerUser(id: number): Promise<DetailEntite | null> {
     ],
     infos: [
       { label: "Email", valeur: u.email },
-      { label: "Rôle", valeur: u.role === "user" ? "Utilisateur" : "Administrateur" },
+      { label: "Rôle", valeur: labelRole(u.role) },
     ],
     sections: [],
   };
@@ -173,7 +179,16 @@ async function chargerClient(id: number): Promise<DetailEntite | null> {
     sousTitre: c.actif ? "Client actif" : "Client archivé",
     actif: c.actif,
     actionLabel: "Archiver",
-    champs: [{ cle: "nom", label: "Nom de la société", valeur: c.nom, type: "text" }],
+    champs: [
+      { cle: "nom", label: "Nom de la société", valeur: c.nom, type: "text" },
+      {
+        cle: "statut",
+        label: "Statut commercial",
+        valeur: normaliserStatutClient(c.statut),
+        type: "select",
+        options: STATUTS_CLIENT.map((s) => ({ value: s.key, label: s.label })),
+      },
+    ],
     infos: [
       { label: "Jours facturés ce mois", valeur: formatJours(jours) },
       { label: "CA régie ce mois", valeur: formatEuro(ca) },
@@ -354,6 +369,12 @@ export async function modifierChampEntite(
   const session = await getSession();
   if (!session) return { ok: false };
 
+  // Le commercial ne peut éditer que le client (son périmètre) ; les autres
+  // entités (delivery) lui sont fermées.
+  if (!peutVoirMarges(session) && ref.type !== "client") {
+    return { ok: false, message: "Accès refusé." };
+  }
+
   const v = valeur.trim();
 
   if (ref.type === "user") {
@@ -364,8 +385,15 @@ export async function modifierChampEntite(
     if (!["prenom", "nom"].includes(cle) || !v) return { ok: false, message: "Valeur invalide." };
     await db.update(freelances).set({ [cle]: v }).where(eq(freelances.id, ref.id));
   } else if (ref.type === "client") {
-    if (cle !== "nom" || !v) return { ok: false, message: "Valeur invalide." };
-    await db.update(clients).set({ nom: v }).where(eq(clients.id, ref.id));
+    if (cle === "nom") {
+      if (!v) return { ok: false, message: "Valeur invalide." };
+      await db.update(clients).set({ nom: v }).where(eq(clients.id, ref.id));
+    } else if (cle === "statut") {
+      await db
+        .update(clients)
+        .set({ statut: normaliserStatutClient(v) })
+        .where(eq(clients.id, ref.id));
+    } else return { ok: false, message: "Champ inconnu." };
   } else if (ref.type === "mission") {
     if (cle === "nom") {
       if (!v) return { ok: false, message: "Le nom est obligatoire." };
@@ -414,6 +442,9 @@ export async function modifierChampEntite(
 export async function basculerActif(ref: EntiteRef): Promise<{ ok: boolean; actif?: boolean }> {
   const session = await getSession();
   if (!session) return { ok: false };
+
+  // Commercial : seul l'archivage d'un client (son périmètre) est permis.
+  if (!peutVoirMarges(session) && ref.type !== "client") return { ok: false };
 
   const table =
     ref.type === "freelance"
