@@ -57,6 +57,8 @@ if [ -n "${HECATON_DB:-}" ] && [ -n "${HECATON_DATABASE_URL:-}" ]; then
   echo "DATABASE_URL_UNPOOLED=\"${HECATON_DB_URL}\"" >> .env.tmp
   mv .env.tmp .env
   echo "→ .env : DATABASE_URL pointe vers la base Hecaton ${HECATON_DB}"
+  export DATABASE_URL="${HECATON_DB_URL}"
+  export DATABASE_URL_UNPOOLED="${HECATON_DB_URL}"
   write_session_secret_if_needed
 
   echo "→ Installation des dépendances..."
