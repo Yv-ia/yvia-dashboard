@@ -84,6 +84,10 @@ export const missions = pgTable("missions", {
   tjmVente: numeric("tjm_vente", { precision: 10, scale: 2 }).notNull(), // ce qu'on facture au client
   // Statut manuel actif / inactif (bouton "Désactiver").
   actif: boolean("actif").notNull().default(true),
+  // Rattachement opérationnel à un revenu récurrent (régie). Vide = régie
+  // ponctuelle classique. Permet au prévisionnel de relier planning réel et
+  // estimation récurrente vendue (cf. lib/recurrents/previsionnel).
+  recurrentId: integer("recurrent_id").references(() => recurrents.id),
 });
 
 // --- AFFECTATIONS (planning jour par jour) ---
@@ -175,8 +179,31 @@ export const opportunites = pgTable("opportunites", {
   montantEstime: numeric("montant_estime", { precision: 12, scale: 2 }),
   // Position dans la colonne du Kanban (drag & drop).
   ordre: integer("ordre").notNull().default(0),
-  // Entité créée lors de la conversion (forfait gagné → projet).
+  // Entité créée lors de la conversion : projet (forfait) ou recurrent (récurrent).
   projetId: integer("projet_id").references(() => projets.id),
+  recurrentId: integer("recurrent_id").references(() => recurrents.id),
+  actif: boolean("actif").notNull().default(true),
+});
+
+// --- RECURRENTS (revenus récurrents / MRR : régie, RUN, licence…) ---
+// Le pendant « récurrent » du projet (forfait). `categorie` décrit la nature du
+// récurrent. Le coût est saisi manuellement pour run/licence ; pour la régie il
+// est dérivé du planning (affectations des missions reliées via missions.recurrentId).
+// Le prévisionnel se calcule à la volée (cf. lib/recurrents/previsionnel) : pas
+// d'échéances matérialisées. dateFin vide = récurrent en cours (projeté jusqu'à
+// l'horizon affiché).
+export const recurrents = pgTable("recurrents", {
+  id: serial("id").primaryKey(),
+  clientId: integer("client_id")
+    .notNull()
+    .references(() => clients.id),
+  nom: text("nom").notNull(),
+  categorie: text("categorie").notNull().default("regie"), // 'regie' | 'run' | 'licence'
+  montantRecurrent: numeric("montant_recurrent", { precision: 12, scale: 2 }).notNull(), // € HT vendu / période
+  coutRecurrent: numeric("cout_recurrent", { precision: 12, scale: 2 }), // € HT coût / période (run/licence) ; régie = dérivé
+  frequence: text("frequence").notNull().default("mensuel"), // enum extensible
+  dateDebut: date("date_debut").notNull(),
+  dateFin: date("date_fin"), // null = en cours
   actif: boolean("actif").notNull().default(true),
 });
 
