@@ -23,6 +23,7 @@ import {
   UserCog,
   Building2,
   BarChart3,
+  Receipt,
   UserCircle,
   LogOut,
   Menu,
@@ -64,6 +65,8 @@ const SECTIONS: Section[] = [
   {
     titre: "Analyse & Admin",
     liens: [
+      // Charges fixes : suivi financier (comme Pilotage), masqué au commercial.
+      { href: "/charges-fixes", label: "Charges fixes", icone: Receipt },
       { href: "/statistiques", label: "Pilotage", icone: BarChart3 },
       { href: "/users", label: "Users", icone: UserCog },
     ],
