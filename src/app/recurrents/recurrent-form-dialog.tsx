@@ -64,7 +64,7 @@ export function RecurrentFormDialog({
           action={async (formData) => {
             const res = await action(formData);
             if (res.ok) {
-              toast.success("Récurrent enregistré.");
+              toast.success("Contrat MCO enregistré.");
               setOpen(false);
             } else {
               toast.error(res.message ?? "Une erreur est survenue.");

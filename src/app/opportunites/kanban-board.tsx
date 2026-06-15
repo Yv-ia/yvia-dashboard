@@ -34,6 +34,17 @@ export type OpportuniteKanban = {
   projetId: number | null;
 };
 
+// Sous-total des montants estimés d'une colonne, ventilé par catégorie (type
+// d'opportunité : forfait / récurrent). Les montants nuls sont ignorés.
+function sousTotauxParType(items: OpportuniteKanban[]): { type: string; montant: number }[] {
+  const parType = new Map<string, number>();
+  for (const opp of items) {
+    if (opp.montantEstime == null) continue;
+    parType.set(opp.type, (parType.get(opp.type) ?? 0) + Number(opp.montantEstime));
+  }
+  return [...parType.entries()].map(([type, montant]) => ({ type, montant }));
+}
+
 export function KanbanBoard({
   opportunites,
   clientsListe,
@@ -72,7 +83,9 @@ export function KanbanBoard({
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
-      {colonnes.map((col) => (
+      {colonnes.map((col) => {
+        const sousTotaux = sousTotauxParType(col.items);
+        return (
         <section
           key={col.statut}
           onDragOver={(e) => e.preventDefault()}
@@ -90,6 +103,22 @@ export function KanbanBoard({
               {col.items.length}
             </span>
           </header>
+
+          {sousTotaux.length > 0 ? (
+            <div className="flex flex-col gap-0.5 rounded-md bg-background/70 px-2 py-1">
+              {sousTotaux.map(({ type, montant }) => (
+                <div
+                  key={type}
+                  className="flex justify-between text-[11px] text-muted-foreground"
+                >
+                  <span>{labelTypeOpportunite(type)}</span>
+                  <span className="tabular-nums font-medium text-foreground">
+                    {formatEuro(montant)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             {col.items.map((opp) => {
@@ -158,7 +187,8 @@ export function KanbanBoard({
             ) : null}
           </div>
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

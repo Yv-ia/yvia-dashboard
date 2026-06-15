@@ -57,8 +57,8 @@ export default async function PageRecurrents({
           <RecurrentFormDialog
             action={creerRecurrent}
             clientsListe={clientsListe}
-            titre="Nouveau récurrent"
-            trigger={<Button>Nouveau récurrent</Button>}
+            titre="Nouveau contrat MCO"
+            trigger={<Button>Nouveau contrat MCO</Button>}
           />
         }
       >
@@ -83,7 +83,7 @@ export default async function PageRecurrents({
       <Card>
         <CardHeader>
           <CardTitle>
-            {liste.length} récurrent{liste.length > 1 ? "s" : ""}
+            {liste.length} contrat{liste.length > 1 ? "s" : ""} MCO
             {archives ? " archivé" + (liste.length > 1 ? "s" : "") : ""}
           </CardTitle>
         </CardHeader>
@@ -91,8 +91,8 @@ export default async function PageRecurrents({
           {liste.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               {archives
-                ? "Aucun récurrent archivé."
-                : "Aucun revenu récurrent. Créez-en un ou convertissez une opportunité récurrente gagnée."}
+                ? "Aucun contrat MCO archivé."
+                : "Aucun contrat MCO. Créez-en un ou convertissez une opportunité récurrente gagnée."}
             </p>
           ) : (
             <Table>
