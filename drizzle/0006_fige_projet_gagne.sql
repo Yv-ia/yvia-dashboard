@@ -1,4 +1,13 @@
 ALTER TABLE "projets" ALTER COLUMN "statut_commercial" SET DEFAULT 'gagne';--> statement-breakpoint
+-- Filet de sécurité : avant toute suppression, on archive les lignes qui vont
+-- disparaître — les projets non gagnés ET leurs échéances/jalons emportés par la
+-- cascade — dans des tables `_backup_0006_*`. Ces tables sont inconnues de l'ORM
+-- (aucun impact applicatif) et restent récupérables en SQL ; À DROPPER MANUELLEMENT
+-- une fois la migration validée en production.
+CREATE TABLE "_backup_0006_projets" AS SELECT * FROM "projets" WHERE "statut_commercial" <> 'gagne';--> statement-breakpoint
+CREATE TABLE "_backup_0006_encaissements" AS SELECT "e".* FROM "encaissements" "e" JOIN "_backup_0006_projets" "p" ON "e"."projet_id" = "p"."id";--> statement-breakpoint
+CREATE TABLE "_backup_0006_decaissements" AS SELECT "d".* FROM "decaissements" "d" JOIN "_backup_0006_projets" "p" ON "d"."projet_id" = "p"."id";--> statement-breakpoint
+CREATE TABLE "_backup_0006_jalons" AS SELECT "j".* FROM "jalons" "j" JOIN "_backup_0006_projets" "p" ON "j"."projet_id" = "p"."id";--> statement-breakpoint
 -- Le pipeline commercial vit désormais dans `opportunites`. Les projets NON gagnés
 -- (prospection / perdu) sont des sujets de pipeline, pas du delivery : on les déplace
 -- vers `opportunites` (type forfait, montant estimé = budget, ordre = id, actif pour
