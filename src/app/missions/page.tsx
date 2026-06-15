@@ -71,10 +71,10 @@ export default async function PageRegie({
         action={
           <MissionFormDialog
             action={creerMission}
-            titre="Nouvelle mission"
+            titre="Nouvelle régie"
             freelancesActifs={freelancesActifs}
             clientsListe={clientsActifs}
-            trigger={<Button>Nouvelle mission</Button>}
+            trigger={<Button>Nouvelle régie</Button>}
           />
         }
       >
