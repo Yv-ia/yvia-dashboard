@@ -92,6 +92,7 @@ export default async function PageDashboard({
         })
         .from(decaissements)
         .innerJoin(projets, eq(decaissements.projetId, projets.id))
+        .innerJoin(clients, eq(projets.clientId, clients.id))
         .where(
           and(
             eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
