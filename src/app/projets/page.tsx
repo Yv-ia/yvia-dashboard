@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
 import { peutVoirMarges } from "@/lib/auth/permissions";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
-import { and, eq, ne, or } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
@@ -40,6 +40,8 @@ export default async function PageProjets({
   const session = await exigerSession();
   const voirMarges = peutVoirMarges(session);
   const { vue } = await searchParams;
+  // Un projet est toujours "gagne" (le pipeline vit dans /opportunites) : son cycle
+  // de vie ici est purement delivery, actif → terminé.
   const termines = vue === "termines" || vue === "archives";
 
   // On récupère TOUT l'échéancier (prévu + réalisé) : le dialogue "Gérer" en a besoin.
@@ -52,7 +54,6 @@ export default async function PageProjets({
         id: projets.id,
         nom: projets.nom,
         budget: projets.budget,
-        statutCommercial: projets.statutCommercial,
         clientId: projets.clientId,
         clientNom: clients.nom,
         clientFiabilite: clients.fiabiliteDefaut,
@@ -61,11 +62,7 @@ export default async function PageProjets({
       })
       .from(projets)
       .innerJoin(clients, eq(projets.clientId, clients.id))
-      .where(
-        termines
-          ? or(eq(projets.actif, false), eq(projets.statutCommercial, "perdu"))
-          : and(eq(projets.actif, true), ne(projets.statutCommercial, "perdu"))
-      )
+      .where(eq(projets.actif, !termines))
       .orderBy(projets.nom),
     db
       .select({
@@ -208,7 +205,6 @@ export default async function PageProjets({
                 <TableRow>
                   <TableHead>Projet</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Budget</TableHead>
                   <TableHead className="text-right">Encaissé</TableHead>
                   {voirMarges ? <TableHead className="text-right">Décaissé</TableHead> : null}
@@ -226,7 +222,6 @@ export default async function PageProjets({
                       clientId: p.clientId,
                       clientNom: p.clientNom,
                       budget: p.budget,
-                      statutCommercial: p.statutCommercial,
                       fiabiliteDefaut: p.fiabiliteDefaut,
                       clientFiabilite: p.clientFiabilite,
                       actif: p.actif,
@@ -242,7 +237,7 @@ export default async function PageProjets({
               {liste.length > 1 ? (
                 <TableFooter>
                   <TableRow>
-                    <TableCell colSpan={3}>Total</TableCell>
+                    <TableCell colSpan={2}>Total</TableCell>
                     <TableCell className="text-right">{formatEuro(totaux.budget)}</TableCell>
                     <TableCell className="text-right">{formatEuro(totaux.enc)}</TableCell>
                     <TableCell className="text-right">{formatEuro(totaux.dec)}</TableCell>

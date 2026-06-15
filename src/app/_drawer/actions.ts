@@ -21,7 +21,6 @@ import { labelRole, peutSupprimerEntites, peutVoirMarges } from "@/lib/auth/perm
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculMissionRealisee } from "@/lib/calculs/marge";
 import { formatEuro, formatJours } from "@/lib/format";
-import { labelStatutCommercial, normaliserStatutCommercial } from "@/lib/projets/statut-commercial";
 import { STATUTS_CLIENT, normaliserStatutClient } from "@/lib/clients/statut";
 import type { DetailEntite, EntiteRef, SuppressionEntite } from "./types";
 
@@ -398,7 +397,6 @@ async function chargerProjet(id: number): Promise<DetailEntite | null> {
       budget: projets.budget,
       clientId: projets.clientId,
       clientNom: clients.nom,
-      statutCommercial: projets.statutCommercial,
     })
     .from(projets)
     .innerJoin(clients, eq(projets.clientId, clients.id))
@@ -442,7 +440,6 @@ async function chargerProjet(id: number): Promise<DetailEntite | null> {
       { cle: "budget", label: "Budget (€)", valeur: entier(p.budget), type: "number" },
     ],
     infos: [
-      { label: "Statut commercial", valeur: labelStatutCommercial(p.statutCommercial) },
       { label: "Encaissé", valeur: formatEuro(totalEnc) },
       { label: "Décaissé", valeur: formatEuro(totalDec) },
       { label: "Marge", valeur: formatEuro(arrondi(totalEnc - totalDec)) },
@@ -530,11 +527,6 @@ export async function modifierChampEntite(
         };
       }
       await db.update(projets).set({ budget: String(n) }).where(eq(projets.id, ref.id));
-    } else if (cle === "statutCommercial") {
-      await db
-        .update(projets)
-        .set({ statutCommercial: normaliserStatutCommercial(v) })
-        .where(eq(projets.id, ref.id));
     } else return { ok: false, message: "Champ inconnu." };
   } else {
     return { ok: false, message: "Type inconnu." };

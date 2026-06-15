@@ -14,7 +14,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { STATUTS_COMMERCIAUX } from "@/lib/projets/statut-commercial";
 import type { Resultat } from "./actions";
 import { ClientFormDialog } from "@/app/clients/client-form-dialog";
 import { creerClient } from "@/app/clients/actions";
@@ -27,7 +26,6 @@ type Projet = {
   clientId: number;
   nom: string;
   budget: string;
-  statutCommercial: string;
 };
 
 export function ProjetFormDialog({
@@ -48,7 +46,7 @@ export function ProjetFormDialog({
   const [clientId, setClientId] = useState(projet?.clientId ? String(projet.clientId) : "");
 
   const cle = projet
-    ? `${projet.id}:${projet.nom}:${projet.budget}:${projet.clientId}:${projet.statutCommercial}`
+    ? `${projet.id}:${projet.nom}:${projet.budget}:${projet.clientId}`
     : "new";
 
   return (
@@ -118,16 +116,6 @@ export function ProjetFormDialog({
               step="1"
               defaultValue={projet?.budget ?? ""}
               required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="statutCommercial">Statut commercial</Label>
-            <Select
-              id="statutCommercial"
-              name="statutCommercial"
-              defaultValue={projet?.statutCommercial ?? "a_qualifier"}
-              options={STATUTS_COMMERCIAUX.map((s) => ({ value: s.key, label: s.label }))}
             />
           </div>
 
