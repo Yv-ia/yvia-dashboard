@@ -11,6 +11,11 @@ import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculerPrevisionnel12Mois } from "./statistiques/previsionnel-calculs";
+import {
+  projeterRecurrent,
+  totaliserProjection,
+  type PlanningMensuel,
+} from "@/lib/recurrents/previsionnel";
 import { formatEuro, formatPourcent } from "@/lib/format";
 import { NavigationMois } from "./navigation-mois";
 import { exigerSession } from "@/lib/auth/server";
@@ -43,7 +48,7 @@ export default async function PageDashboard({
   };
 
   // Données du mois affiché + sources annuelles du prévisionnel (CA par source).
-  const [encMois, decMois, affsAnnee, forfaitsGagnes, recsRegie, recsNonRegie] =
+  const [encMois, decMois, affsAnnee, forfaitsGagnes, recsRegie, recsNonRegie, decAnnee] =
     await Promise.all([
     db
       .select({ montant: encaissements.montant })
@@ -72,9 +77,14 @@ export default async function PageDashboard({
         )
       ),
     // --- Sources annuelles du prévisionnel (mêmes requêtes que /statistiques/previsionnel) ---
-    // Régie réel : tous les jours posés de l'année (date + TJM vente).
+    // Régie réel : tous les jours posés de l'année (date + TJM vente + TJM achat
+    // pour le coût prévisionnel régie).
     db
-      .select({ date: affectations.date, tjmVente: affectations.tjmVente })
+      .select({
+        date: affectations.date,
+        tjmVente: affectations.tjmVente,
+        tjmAchat: affectations.tjmAchat,
+      })
       .from(affectations)
       .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
     // Forfait : booking des deals forfait GAGNÉS, par mois de signature (date_gagne).
@@ -99,6 +109,19 @@ export default async function PageDashboard({
       .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
+    // Coût forfait : décaissements de l'année (réalisés + prévus = prévisionnel plein).
+    db
+      .select({ montant: decaissements.montant })
+      .from(decaissements)
+      .innerJoin(projets, eq(decaissements.projetId, projets.id))
+      .where(
+        and(
+          eq(projets.actif, true),
+          ne(projets.statutCommercial, "perdu"),
+          gte(decaissements.date, debutAnnee),
+          lte(decaissements.date, finAnnee)
+        )
+      ),
   ]);
 
   const arrondi = (n: number) => Math.round(n * 100) / 100;
@@ -124,6 +147,26 @@ export default async function PageDashboard({
   const caForfaitAnnee = previsionnel.forfait;
   const caMcoAnnee = previsionnel.recurrence;
   const caAnnuelTotal = previsionnel.total;
+
+  // Coût prévisionnel de l'année, même maille que le CA (pour comparer l'annuel à
+  // l'annuel) : régie = TJM achat du planning réel ; MCO = coût projeté des
+  // récurrents RUN/licence ; forfait = décaissements de l'année.
+  const horizonAnnee = Array.from(
+    { length: 12 },
+    (_, i) => `${annee}-${String(i + 1).padStart(2, "0")}`
+  );
+  const planningVide: PlanningMensuel = new Map();
+  const coutRegieAnnee = arrondi(affsAnnee.reduce((s, a) => s + Number(a.tjmAchat), 0));
+  const coutMcoAnnee = arrondi(
+    recsNonRegie.reduce((s, r) => {
+      const points = projeterRecurrent(versRecurrentPrevisionnel(r), planningVide, horizonAnnee);
+      return s + totaliserProjection(points).cout;
+    }, 0)
+  );
+  const coutForfaitAnnee = arrondi(decAnnee.reduce((s, d) => s + Number(d.montant), 0));
+  const coutAnnuelTotal = arrondi(coutRegieAnnee + coutMcoAnnee + coutForfaitAnnee);
+  const margePrevAnnee = arrondi(caAnnuelTotal - coutAnnuelTotal);
+  const tauxMargePrevAnnee = caAnnuelTotal > 0 ? margePrevAnnee / caAnnuelTotal : 0;
 
   // Synthèse de trésorerie du mois (réalisé) : encaissé vs décaissé.
   // Marge brute = ce qui est entré moins ce qui est sorti sur le mois.
@@ -162,10 +205,34 @@ export default async function PageDashboard({
         </CardContent>
       </Card>
 
-      {/* Indicateurs du mois affiché — coût global et rentabilité */}
-      <div className="grid grid-cols-2 gap-4">
-        <Indicateur titre="Coût global" valeur={formatEuro(coutTotal)} />
-        <Indicateur titre="Taux de marge brute" valeur={formatPourcent(tauxMarge)} />
+      {/* Coût prévisionnel de l'année — même maille que le CA (comparer choux/choux) */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Coût prévisionnel {annee}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="flex flex-col justify-center rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground">Total {annee}</p>
+              <p className="font-display text-3xl tabular-nums sm:text-4xl">
+                {formatEuro(coutAnnuelTotal)}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3 lg:col-span-2">
+              <LigneCaAnnuel titre="Régie" valeur={coutRegieAnnee} />
+              <LigneCaAnnuel titre="Forfait" valeur={coutForfaitAnnee} />
+              <LigneCaAnnuel titre="Maintenance MCO" valeur={coutMcoAnnee} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Marge prévisionnelle annuelle (CA − coût) + suivi réalisé du mois */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Indicateur titre={`Marge prévisionnelle ${annee}`} valeur={formatEuro(margePrevAnnee)} />
+        <Indicateur titre="Taux de marge prévisionnel" valeur={formatPourcent(tauxMargePrevAnnee)} />
+        <Indicateur titre="Coût global (mois)" valeur={formatEuro(coutTotal)} />
+        <Indicateur titre="Taux de marge brute (mois)" valeur={formatPourcent(tauxMarge)} />
       </div>
     </div>
   );
