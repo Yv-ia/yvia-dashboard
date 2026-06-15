@@ -8,10 +8,16 @@ import {
   projets,
   encaissements,
   decaissements,
+  recurrents,
 } from "@/db/schema";
 import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
+import {
+  projeterRecurrent,
+  totaliserProjection,
+  type PlanningMensuel,
+} from "@/lib/recurrents/previsionnel";
 import { formatEuro, formatPourcent, formatDate } from "@/lib/format";
 import { NavigationMois } from "./navigation-mois";
 import { EntityLink } from "./_drawer/drawer-stack";
@@ -33,9 +39,21 @@ export default async function PageDashboard({
 
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
+  const debutAnnee = `${annee}-01-01`;
+  const finAnnee = `${annee}-12-31`;
 
-  // Données du mois affiché.
-  const [affs, encMois, decMois, freelancesActifs, encPrevus, decPrevus] = await Promise.all([
+  // Données du mois affiché + agrégats annuels (CA prévisionnel par source).
+  const [
+    affs,
+    encMois,
+    decMois,
+    freelancesActifs,
+    encPrevus,
+    decPrevus,
+    affsAnnee,
+    encAnnee,
+    recurrentsAnnee,
+  ] = await Promise.all([
     // Régie : chaque jour affecté porte son propre TJM (figé à la pose). On n'a
     // besoin que des TJM (KPI) et du freelance (encart « non staffés »).
     db
@@ -124,9 +142,68 @@ export default async function PageDashboard({
         )
       )
       .orderBy(decaissements.date),
+    // --- Agrégats annuels (CA prévisionnel par source) ---
+    // Régie : Σ TJM vente des affectations de l'année.
+    db
+      .select({ tjmVente: affectations.tjmVente })
+      .from(affectations)
+      .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
+    // Forfait : Σ encaissements de l'année (réalisés + prévus = prévisionnel plein).
+    db
+      .select({ montant: encaissements.montant })
+      .from(encaissements)
+      .innerJoin(projets, eq(encaissements.projetId, projets.id))
+      .where(
+        and(
+          eq(projets.actif, true),
+          ne(projets.statutCommercial, "perdu"),
+          gte(encaissements.date, debutAnnee),
+          lte(encaissements.date, finAnnee)
+        )
+      ),
+    // Maintenance MCO : récurrents RUN / licence (la régie est déjà comptée via les
+    // affectations ci-dessus → on exclut la catégorie régie pour ne pas la doubler).
+    db
+      .select({
+        categorie: recurrents.categorie,
+        montantRecurrent: recurrents.montantRecurrent,
+        coutRecurrent: recurrents.coutRecurrent,
+        dateDebut: recurrents.dateDebut,
+        dateFin: recurrents.dateFin,
+      })
+      .from(recurrents)
+      .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
   ]);
 
   const arrondi = (n: number) => Math.round(n * 100) / 100;
+
+  // CA prévisionnel de l'année, ventilé par source. La régie vient du planning
+  // (affectations) ; le MCO RUN/licence est projeté sur les 12 mois (planning vide
+  // = estimation mensuelle, cf. projeterRecurrent).
+  const horizonAnnee = Array.from(
+    { length: 12 },
+    (_, i) => `${annee}-${String(i + 1).padStart(2, "0")}`
+  );
+  const planningVide: PlanningMensuel = new Map();
+  const caRegieAnnee = arrondi(affsAnnee.reduce((s, a) => s + Number(a.tjmVente), 0));
+  const caForfaitAnnee = arrondi(encAnnee.reduce((s, e) => s + Number(e.montant), 0));
+  const caMcoAnnee = arrondi(
+    recurrentsAnnee.reduce((s, r) => {
+      const points = projeterRecurrent(
+        {
+          categorie: r.categorie,
+          montantRecurrent: Number(r.montantRecurrent),
+          coutRecurrent: r.coutRecurrent == null ? null : Number(r.coutRecurrent),
+          dateDebut: r.dateDebut,
+          dateFin: r.dateFin,
+        },
+        planningVide,
+        horizonAnnee
+      );
+      return s + totaliserProjection(points).revenu;
+    }, 0)
+  );
+  const caAnnuelTotal = arrondi(caRegieAnnee + caForfaitAnnee + caMcoAnnee);
 
   // Totaux du mois = régie (jours posés × TJM) + forfait (encaissements / décaissements réalisés).
   const caForfait = encMois.reduce((s, e) => s + Number(e.montant), 0);
@@ -157,6 +234,21 @@ export default async function PageDashboard({
         <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
         <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
       </div>
+
+      {/* CA prévisionnel de l'année, ventilé par source */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">CA prévisionnel {annee}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-4">
+            <LigneCaAnnuel titre="Régie" valeur={caRegieAnnee} />
+            <LigneCaAnnuel titre="Forfait" valeur={caForfaitAnnee} />
+            <LigneCaAnnuel titre="Maintenance MCO" valeur={caMcoAnnee} />
+            <LigneCaAnnuel titre="Total" valeur={caAnnuelTotal} accent />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Points d'attention : le prévisionnel de trésorerie + les freelances à staffer */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -212,6 +304,25 @@ export default async function PageDashboard({
           reste={freelancesNonStaffes.length - Math.min(freelancesNonStaffes.length, 4)}
         />
       </div>
+    </div>
+  );
+}
+
+function LigneCaAnnuel({
+  titre,
+  valeur,
+  accent = false,
+}: {
+  titre: string;
+  valeur: number;
+  accent?: boolean;
+}) {
+  return (
+    <div className={`rounded-lg border p-3 ${accent ? "border-primary/30 bg-primary/5" : ""}`}>
+      <p className="text-xs text-muted-foreground">{titre}</p>
+      <p className={`font-display text-xl tabular-nums ${accent ? "text-primary" : ""}`}>
+        {formatEuro(valeur)}
+      </p>
     </div>
   );
 }
