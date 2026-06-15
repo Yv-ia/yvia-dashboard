@@ -1,12 +1,13 @@
 // Synthèse prévisionnelle sur 12 mois, par source de CA. Module pur (testable).
 //
-//  - Régie      : Σ TJM vente des affectations du mois (réalisé passé + jours saisis
-//                 d'avance dans le planning = prévisionnel saisi).
-//  - Récurrence : projection des contrats récurrents (RUN / licence) — réalisé ou
-//                 estimation mensuelle (cf. projeterRecurrent). La régie en est exclue
-//                 (déjà portée par la ligne Régie) pour ne pas la compter deux fois.
-//  - Forfait    : Σ de l'échéancier des projets signés (encaissements réalisés ET
-//                 prévus) — le CA du deal, pas seulement ce qui est déjà encaissé.
+//  - Régie      : réel du planning là où il existe (Σ TJM vente des affectations du
+//                 mois), sinon l'hypothèse macro (récurrents catégorie régie : un
+//                 montant mensuel sur une période début→fin). Le détail jour-par-jour
+//                 prime, le macro prend le relais sur les mois non encore planifiés.
+//  - Récurrence : projection des contrats récurrents RUN / licence (la régie est
+//                 portée par sa propre ligne → exclue ici, pas de double compte).
+//  - Forfait    : booking — le CA d'un deal forfait gagné compte dans le mois de sa
+//                 signature (date_gagne). Le suivi des encaissements est ailleurs.
 
 import {
   projeterRecurrent,
@@ -38,39 +39,53 @@ export function moisDeLAnnee(annee: number): string[] {
   return Array.from({ length: 12 }, (_, i) => `${annee}-${String(i + 1).padStart(2, "0")}`);
 }
 
-export function calculerPrevisionnel12Mois({
-  annee,
-  affectations,
-  encaissements,
-  recurrents,
-}: {
-  annee: number;
-  affectations: { date: string; tjmVente: Montant }[];
-  encaissements: { date: string; montant: Montant }[];
-  recurrents: RecurrentPrevisionnel[]; // déjà filtrés hors régie côté requête
-}): { lignes: LignePrevisionnel12[]; totaux: TotauxPrevisionnel12 } {
-  const horizon = moisDeLAnnee(annee);
-  const regie = new Map<string, number>();
-  const forfait = new Map<string, number>();
-  const recurrence = new Map<string, number>();
-
-  for (const a of affectations) {
-    const m = versMois(a.date);
-    regie.set(m, (regie.get(m) ?? 0) + Number(a.tjmVente));
-  }
-  for (const e of encaissements) {
-    const m = versMois(e.date);
-    forfait.set(m, (forfait.get(m) ?? 0) + Number(e.montant));
-  }
+// Projette une liste de récurrents sur l'horizon (planning vide = estimation pure
+// par le montant macro), agrégée par mois.
+function projeterParMois(recurrents: RecurrentPrevisionnel[], horizon: string[]): Map<string, number> {
+  const parMois = new Map<string, number>();
   const planningVide: PlanningMensuel = new Map();
   for (const r of recurrents) {
     for (const p of projeterRecurrent(r, planningVide, horizon)) {
-      recurrence.set(p.mois, (recurrence.get(p.mois) ?? 0) + p.revenu);
+      parMois.set(p.mois, (parMois.get(p.mois) ?? 0) + p.revenu);
     }
+  }
+  return parMois;
+}
+
+export function calculerPrevisionnel12Mois({
+  annee,
+  affectations,
+  recurrentsRegie,
+  recurrentsNonRegie,
+  forfaitsGagnes,
+}: {
+  annee: number;
+  affectations: { date: string; tjmVente: Montant }[];
+  recurrentsRegie: RecurrentPrevisionnel[]; // hypothèses macro de régie (catégorie régie)
+  recurrentsNonRegie: RecurrentPrevisionnel[]; // RUN / licence → ligne Récurrence
+  forfaitsGagnes: { dateGagne: string | null; montant: Montant | null }[]; // opps forfait gagnées
+}): { lignes: LignePrevisionnel12[]; totaux: TotauxPrevisionnel12 } {
+  const horizon = moisDeLAnnee(annee);
+
+  const regieReel = new Map<string, number>();
+  for (const a of affectations) {
+    const m = versMois(a.date);
+    regieReel.set(m, (regieReel.get(m) ?? 0) + Number(a.tjmVente));
+  }
+  const regieMacro = projeterParMois(recurrentsRegie, horizon);
+  const recurrence = projeterParMois(recurrentsNonRegie, horizon);
+
+  const forfait = new Map<string, number>();
+  for (const f of forfaitsGagnes) {
+    if (!f.dateGagne) continue; // pas encore signé/daté → pas bookable
+    const m = versMois(f.dateGagne);
+    forfait.set(m, (forfait.get(m) ?? 0) + Number(f.montant ?? 0));
   }
 
   const lignes = horizon.map((mois) => {
-    const rg = arrondi(regie.get(mois) ?? 0);
+    const reel = regieReel.get(mois) ?? 0;
+    // Réel du planning s'il existe ce mois-ci, sinon l'hypothèse macro.
+    const rg = arrondi(reel > 0 ? reel : regieMacro.get(mois) ?? 0);
     const rc = arrondi(recurrence.get(mois) ?? 0);
     const ff = arrondi(forfait.get(mois) ?? 0);
     return { mois, regie: rg, recurrence: rc, forfait: ff, total: arrondi(rg + rc + ff) };

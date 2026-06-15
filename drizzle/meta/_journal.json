@@ -57,6 +57,13 @@
       "when": 1781515676973,
       "tag": "0007_backfill_projets_forfait_gagnes",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781528168396,
+      "tag": "0008_ajout_date_gagne",
+      "breakpoints": true
     }
   ]
 }

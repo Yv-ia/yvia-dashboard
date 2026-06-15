@@ -181,6 +181,10 @@ export const opportunites = pgTable("opportunites", {
   montantEstime: numeric("montant_estime", { precision: 12, scale: 2 }),
   // Position dans la colonne du Kanban (drag & drop).
   ordre: integer("ordre").notNull().default(0),
+  // Date de passage en « gagné » (signature). Sert au booking du CA forfait : le CA
+  // du deal compte dès la signature, dans ce mois. Renseignée automatiquement au
+  // passage en gagné, éditable à la main. Null tant que l'opportunité n'est pas gagnée.
+  dateGagne: date("date_gagne"),
   // Entité créée lors de la conversion : projet (forfait) ou recurrent (récurrent).
   projetId: integer("projet_id").references(() => projets.id),
   recurrentId: integer("recurrent_id").references(() => recurrents.id),

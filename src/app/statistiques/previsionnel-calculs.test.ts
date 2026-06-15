@@ -2,20 +2,24 @@ import { describe, expect, test } from "vitest";
 import { calculerPrevisionnel12Mois } from "./previsionnel-calculs";
 
 describe("calculerPrevisionnel12Mois", () => {
-  test("ventile Régie / Récurrence / Forfait par mois sur 12 colonnes", () => {
+  test("Régie : réel du planning sinon hypothèse macro ; Forfait : booking par date de signature", () => {
     const { lignes, totaux } = calculerPrevisionnel12Mois({
       annee: 2026,
       affectations: [
         { date: "2026-01-05", tjmVente: "500" },
-        { date: "2026-01-06", tjmVente: "500" }, // régie janvier = 1000
-        { date: "2026-03-10", tjmVente: "700" }, // régie mars = 700
+        { date: "2026-01-06", tjmVente: "500" }, // régie janvier réel = 1000
       ],
-      encaissements: [
-        { date: "2026-01-31", montant: "10000" }, // forfait janvier (encaissé + prévu confondus)
-        { date: "2026-02-28", montant: "5000" }, // forfait février
+      // Hypothèse macro DeltaRM : 25k/mois de janvier à mars.
+      recurrentsRegie: [
+        {
+          categorie: "regie",
+          montantRecurrent: 25000,
+          coutRecurrent: null,
+          dateDebut: "2026-01-01",
+          dateFin: "2026-03-31",
+        },
       ],
-      recurrents: [
-        // RUN à 2000 €/mois, en cours toute l'année.
+      recurrentsNonRegie: [
         {
           categorie: "run",
           montantRecurrent: 2000,
@@ -24,39 +28,40 @@ describe("calculerPrevisionnel12Mois", () => {
           dateFin: null,
         },
       ],
+      forfaitsGagnes: [
+        { dateGagne: "2026-02-10", montant: "30000" }, // booké en février
+        { dateGagne: null, montant: "9999" }, // pas signé → ignoré
+      ],
     });
 
     expect(lignes).toHaveLength(12);
-    const janvier = lignes[0];
-    expect(janvier.mois).toBe("2026-01");
-    expect(janvier.regie).toBe(1000);
-    expect(janvier.forfait).toBe(10000);
-    expect(janvier.recurrence).toBe(2000);
-    expect(janvier.total).toBe(13000);
+    // Janvier : planning réel (1000) prime sur le macro (25000).
+    expect(lignes[0].regie).toBe(1000);
+    // Février & mars : pas de planning → macro 25000.
+    expect(lignes[1].regie).toBe(25000);
+    expect(lignes[2].regie).toBe(25000);
+    // Avril : hors période macro et sans planning → 0.
+    expect(lignes[3].regie).toBe(0);
 
-    expect(lignes[2].regie).toBe(700); // mars
+    expect(lignes[1].forfait).toBe(30000); // février
+    expect(lignes[0].forfait).toBe(0);
+    expect(totaux.forfait).toBe(30000);
 
-    expect(totaux.regie).toBe(1700);
-    expect(totaux.forfait).toBe(15000);
-    expect(totaux.recurrence).toBe(2000 * 12); // 24000
-    expect(totaux.total).toBe(1700 + 15000 + 24000);
+    expect(lignes[0].recurrence).toBe(2000);
+    expect(totaux.recurrence).toBe(2000 * 12);
+
+    expect(lignes[1].total).toBe(25000 + 30000 + 2000);
   });
 
-  test("un récurrent démarré en cours d'année ne compte que ses mois actifs", () => {
-    const { totaux } = calculerPrevisionnel12Mois({
+  test("aucune donnée → 12 lignes à zéro", () => {
+    const { lignes, totaux } = calculerPrevisionnel12Mois({
       annee: 2026,
       affectations: [],
-      encaissements: [],
-      recurrents: [
-        {
-          categorie: "licence",
-          montantRecurrent: 1000,
-          coutRecurrent: null,
-          dateDebut: "2026-10-01", // oct, nov, déc = 3 mois
-          dateFin: null,
-        },
-      ],
+      recurrentsRegie: [],
+      recurrentsNonRegie: [],
+      forfaitsGagnes: [],
     });
-    expect(totaux.recurrence).toBe(3000);
+    expect(lignes).toHaveLength(12);
+    expect(totaux.total).toBe(0);
   });
 });

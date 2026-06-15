@@ -24,6 +24,20 @@ function montantOuNull(v: FormDataEntryValue | null): string | null {
   return Number.isFinite(n) && n >= 0 ? String(Math.round(n)) : null;
 }
 
+// Date 'YYYY-MM-DD' valide, ou null.
+function dateOuNull(v: FormDataEntryValue | null): string | null {
+  const s = String(v ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+}
+
+const aujourdhui = () => new Date().toISOString().slice(0, 10);
+
+// Date de signature à appliquer selon le statut : une opp gagnée porte une date
+// (celle saisie, sinon aujourd'hui) ; une opp non gagnée n'en a pas.
+function dateGagneSelonStatut(statut: string, saisie: string | null): string | null {
+  return statut === STATUT_COMMERCIAL_EXISTANT ? saisie ?? aujourdhui() : null;
+}
+
 export async function creerOpportunite(formData: FormData): Promise<Resultat> {
   const garde = await exigerConnecte();
   if (!garde.ok) return garde;
@@ -36,10 +50,11 @@ export async function creerOpportunite(formData: FormData): Promise<Resultat> {
   const type = normaliserTypeOpportunite(String(formData.get("type") ?? ""));
   const statut = normaliserStatutCommercial(String(formData.get("statut") ?? ""));
   const montantEstime = montantOuNull(formData.get("montantEstime"));
+  const dateGagne = dateGagneSelonStatut(statut, dateOuNull(formData.get("dateGagne")));
 
   const [opp] = await db
     .insert(opportunites)
-    .values({ clientId, nom, type, statut, montantEstime })
+    .values({ clientId, nom, type, statut, montantEstime, dateGagne })
     .returning({ id: opportunites.id });
   revalidatePath("/opportunites");
   return { ok: true, id: opp.id };
@@ -57,10 +72,11 @@ export async function modifierOpportunite(formData: FormData): Promise<Resultat>
   const type = normaliserTypeOpportunite(String(formData.get("type") ?? ""));
   const statut = normaliserStatutCommercial(String(formData.get("statut") ?? ""));
   const montantEstime = montantOuNull(formData.get("montantEstime"));
+  const dateGagne = dateGagneSelonStatut(statut, dateOuNull(formData.get("dateGagne")));
 
   await db
     .update(opportunites)
-    .set({ nom, type, statut, montantEstime })
+    .set({ nom, type, statut, montantEstime, dateGagne })
     .where(eq(opportunites.id, id));
   revalidatePath("/opportunites");
   return { ok: true };
@@ -92,11 +108,22 @@ export async function definirStatutOpportunite(formData: FormData): Promise<Resu
   if (!id) return { ok: false, message: "Opportunité introuvable." };
   const statut = normaliserStatutCommercial(String(formData.get("statut") ?? ""));
   const ordre = Number(formData.get("ordre"));
+  const valeurs = { statut, ordre: Number.isFinite(ordre) ? ordre : 0 };
 
-  await db
-    .update(opportunites)
-    .set({ statut, ordre: Number.isFinite(ordre) ? ordre : 0 })
-    .where(eq(opportunites.id, id));
+  // Passage en « gagné » via le Kanban : on date la signature (aujourd'hui) si elle
+  // ne l'est pas déjà — sans écraser une date existante (simple réordonnancement).
+  if (statut === STATUT_COMMERCIAL_EXISTANT) {
+    const [cur] = await db
+      .select({ dateGagne: opportunites.dateGagne })
+      .from(opportunites)
+      .where(eq(opportunites.id, id));
+    await db
+      .update(opportunites)
+      .set({ ...valeurs, dateGagne: cur?.dateGagne ?? aujourdhui() })
+      .where(eq(opportunites.id, id));
+  } else {
+    await db.update(opportunites).set(valeurs).where(eq(opportunites.id, id));
+  }
   revalidatePath("/opportunites");
   return { ok: true };
 }
@@ -142,7 +169,7 @@ export async function convertirOpportunite(formData: FormData): Promise<Resultat
       .returning({ id: projets.id });
     await db
       .update(opportunites)
-      .set({ statut: "gagne", projetId: projet.id })
+      .set({ statut: "gagne", projetId: projet.id, dateGagne: opp.dateGagne ?? aujourdhui() })
       .where(eq(opportunites.id, id));
     revalidatePath("/opportunites");
     revalidatePath("/projets");
@@ -163,7 +190,7 @@ export async function convertirOpportunite(formData: FormData): Promise<Resultat
     .returning({ id: recurrents.id });
   await db
     .update(opportunites)
-    .set({ statut: "gagne", recurrentId: rec.id })
+    .set({ statut: "gagne", recurrentId: rec.id, dateGagne: opp.dateGagne ?? aujourdhui() })
     .where(eq(opportunites.id, id));
   revalidatePath("/opportunites");
   revalidatePath("/recurrents");

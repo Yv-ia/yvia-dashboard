@@ -10,6 +10,7 @@ import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres
 import { formatEuro } from "@/lib/format";
 import { NavigationMois } from "../navigation-mois";
 import { MissionFormDialog } from "./mission-form-dialog";
+import { HypotheseRegieDialog } from "./hypothese-regie-dialog";
 import { RegieMensuelleBoard } from "./regie-mensuelle-board";
 import { agregerRegieMensuelle, type AffectationRegie } from "@/lib/missions/regie-mensuelle";
 import { creerMission } from "./actions";
@@ -69,13 +70,19 @@ export default async function PageRegie({
     <div className="space-y-6">
       <ListViewToolbar
         action={
-          <MissionFormDialog
-            action={creerMission}
-            titre="Nouvelle mission"
-            freelancesActifs={freelancesActifs}
-            clientsListe={clientsActifs}
-            trigger={<Button>Nouvelle mission</Button>}
-          />
+          <div className="flex flex-wrap gap-2">
+            <HypotheseRegieDialog
+              clientsListe={clientsActifs}
+              trigger={<Button variant="outline">Hypothèse régie</Button>}
+            />
+            <MissionFormDialog
+              action={creerMission}
+              titre="Nouvelle mission"
+              freelancesActifs={freelancesActifs}
+              clientsListe={clientsActifs}
+              trigger={<Button>Nouvelle mission</Button>}
+            />
+          </div>
         }
       >
         <NavigationMois basePath="/missions" annee={annee} mois={mois} />

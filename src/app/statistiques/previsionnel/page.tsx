@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { db } from "@/db";
-import { affectations, projets, encaissements, recurrents } from "@/db/schema";
+import { affectations, opportunites, recurrents } from "@/db/schema";
 import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,50 +36,58 @@ export default async function PagePrevisionnel({
   const debutAnnee = `${annee}-01-01`;
   const finAnnee = `${annee}-12-31`;
 
-  const [affs, encs, recs] = await Promise.all([
-    // Régie : tous les jours posés de l'année (réalisé + saisis d'avance).
+  const champsRecurrent = {
+    categorie: recurrents.categorie,
+    montantRecurrent: recurrents.montantRecurrent,
+    coutRecurrent: recurrents.coutRecurrent,
+    dateDebut: recurrents.dateDebut,
+    dateFin: recurrents.dateFin,
+  };
+
+  const [affs, forfaitsGagnes, recsRegie, recsNonRegie] = await Promise.all([
+    // Régie réel : tous les jours posés de l'année (réalisé + saisis d'avance).
     db
       .select({ date: affectations.date, tjmVente: affectations.tjmVente })
       .from(affectations)
       .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
-    // Forfait : échéancier complet (encaissé ET prévu) des projets signés = le CA du
-    // deal, pas seulement ce qui est encaissé.
+    // Forfait : booking des deals forfait GAGNÉS, par mois de signature (date_gagne).
     db
-      .select({ date: encaissements.date, montant: encaissements.montant })
-      .from(encaissements)
-      .innerJoin(projets, eq(encaissements.projetId, projets.id))
+      .select({ dateGagne: opportunites.dateGagne, montant: opportunites.montantEstime })
+      .from(opportunites)
       .where(
         and(
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(encaissements.date, debutAnnee),
-          lte(encaissements.date, finAnnee)
+          eq(opportunites.type, "forfait"),
+          eq(opportunites.statut, "gagne"),
+          gte(opportunites.dateGagne, debutAnnee),
+          lte(opportunites.dateGagne, finAnnee)
         )
       ),
+    // Régie macro : hypothèses (récurrents catégorie régie) → relais des mois non planifiés.
+    db
+      .select(champsRecurrent)
+      .from(recurrents)
+      .where(and(eq(recurrents.actif, true), eq(recurrents.categorie, "regie"))),
     // Récurrence : contrats RUN / licence (la régie est portée par sa propre ligne).
     db
-      .select({
-        categorie: recurrents.categorie,
-        montantRecurrent: recurrents.montantRecurrent,
-        coutRecurrent: recurrents.coutRecurrent,
-        dateDebut: recurrents.dateDebut,
-        dateFin: recurrents.dateFin,
-      })
+      .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
   ]);
 
+  const versRecurrentPrevisionnel = (r: (typeof recsRegie)[number]) => ({
+    categorie: r.categorie,
+    montantRecurrent: Number(r.montantRecurrent),
+    coutRecurrent: r.coutRecurrent == null ? null : Number(r.coutRecurrent),
+    dateDebut: r.dateDebut,
+    dateFin: r.dateFin,
+  });
+
   const { lignes, totaux } = calculerPrevisionnel12Mois({
     annee,
     affectations: affs,
-    encaissements: encs,
-    recurrents: recs.map((r) => ({
-      categorie: r.categorie,
-      montantRecurrent: Number(r.montantRecurrent),
-      coutRecurrent: r.coutRecurrent == null ? null : Number(r.coutRecurrent),
-      dateDebut: r.dateDebut,
-      dateFin: r.dateFin,
-    })),
+    recurrentsRegie: recsRegie.map(versRecurrentPrevisionnel),
+    recurrentsNonRegie: recsNonRegie.map(versRecurrentPrevisionnel),
+    forfaitsGagnes,
   });
 
   // Une ligne du tableau = une source, avec ses 12 valeurs mensuelles + total.
