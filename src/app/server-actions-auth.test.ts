@@ -32,6 +32,7 @@ import * as freelances from "./freelances/actions";
 import * as missions from "./missions/actions";
 import * as projets from "./projets/actions";
 import * as planning from "./planning-actions";
+import * as users from "./users/actions";
 
 beforeEach(() => {
   getSession.mockReset();
@@ -63,6 +64,10 @@ const actionsFormData: Array<[string, (fd: FormData) => Promise<{ ok: boolean; m
   ["projets.definirFiabiliteProjet", projets.definirFiabiliteProjet],
   ["projets.ajouterJalon", projets.ajouterJalon],
   ["projets.supprimerJalon", projets.supprimerJalon],
+  ["users.supprimerUtilisateur", users.supprimerUtilisateur],
+  ["users.modifierRoleUtilisateur", users.modifierRoleUtilisateur],
+  ["users.creerInvitation", users.creerInvitation],
+  ["users.supprimerInvitation", users.supprimerInvitation],
 ];
 
 describe("Server Actions (FormData) : rejet sans session", () => {

@@ -1,6 +1,6 @@
 {
-  "id": "c3f12800-9f81-463c-8d13-345cc0335e4e",
-  "prevId": "e96cf518-56f6-4c81-9870-56e99c1da924",
+  "id": "4ba04ee1-6f2b-4ba0-be77-1baada21ffcc",
+  "prevId": "c3f12800-9f81-463c-8d13-345cc0335e4e",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -500,6 +500,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": true
+        },
+        "recurrent_id": {
+          "name": "recurrent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
         }
       },
       "indexes": {},
@@ -523,6 +529,19 @@
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "missions_recurrent_id_recurrents_id_fk": {
+          "name": "missions_recurrent_id_recurrents_id_fk",
+          "tableFrom": "missions",
+          "tableTo": "recurrents",
+          "columnsFrom": [
+            "recurrent_id"
           ],
           "columnsTo": [
             "id"
@@ -592,6 +611,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "recurrent_id": {
+          "name": "recurrent_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
         "actif": {
           "name": "actif",
           "type": "boolean",
@@ -621,6 +646,19 @@
           "tableTo": "projets",
           "columnsFrom": [
             "projet_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "opportunites_recurrent_id_recurrents_id_fk": {
+          "name": "opportunites_recurrent_id_recurrents_id_fk",
+          "tableFrom": "opportunites",
+          "tableTo": "recurrents",
+          "columnsFrom": [
+            "recurrent_id"
           ],
           "columnsTo": [
             "id"
@@ -689,6 +727,96 @@
         "projets_client_id_clients_id_fk": {
           "name": "projets_client_id_clients_id_fk",
           "tableFrom": "projets",
+          "tableTo": "clients",
+          "columnsFrom": [
+            "client_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.recurrents": {
+      "name": "recurrents",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "serial",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "client_id": {
+          "name": "client_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "nom": {
+          "name": "nom",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "categorie": {
+          "name": "categorie",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'regie'"
+        },
+        "montant_recurrent": {
+          "name": "montant_recurrent",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cout_recurrent": {
+          "name": "cout_recurrent",
+          "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "frequence": {
+          "name": "frequence",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'mensuel'"
+        },
+        "date_debut": {
+          "name": "date_debut",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "date_fin": {
+          "name": "date_fin",
+          "type": "date",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "actif": {
+          "name": "actif",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "recurrents_client_id_clients_id_fk": {
+          "name": "recurrents_client_id_clients_id_fk",
+          "tableFrom": "recurrents",
           "tableTo": "clients",
           "columnsFrom": [
             "client_id"

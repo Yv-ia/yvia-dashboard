@@ -14,8 +14,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  CalendarRange,
   Briefcase,
   FolderKanban,
+  Target,
+  Repeat,
   Users,
   UserCog,
   Building2,
@@ -32,15 +35,39 @@ import { peutAccederRoute, peutGererUtilisateurs } from "@/lib/auth/permissions"
 
 // `match` = préfixes de chemin qui rendent l'onglet actif (regroupements de sous-pages).
 type Lien = { href: string; label: string; icone: LucideIcon; match?: string[] };
+// Une section regroupe des liens sous un titre optionnel (le Dashboard reste sans titre, en tête).
+type Section = { titre?: string; liens: Lien[] };
 
-const LIENS: Lien[] = [
-  { href: "/", label: "Dashboard", icone: LayoutDashboard, match: ["/"] },
-  { href: "/missions", label: "Missions", icone: Briefcase },
-  { href: "/projets", label: "Projets", icone: FolderKanban },
-  { href: "/freelances", label: "Freelances", icone: Users },
-  { href: "/clients", label: "Clients", icone: Building2 },
-  { href: "/statistiques", label: "Pilotage", icone: BarChart3 },
-  { href: "/users", label: "Users", icone: UserCog },
+const SECTIONS: Section[] = [
+  {
+    liens: [
+      { href: "/", label: "Dashboard", icone: LayoutDashboard, match: ["/"] },
+      { href: "/planning", label: "Planning", icone: CalendarRange },
+    ],
+  },
+  {
+    titre: "Activité",
+    liens: [
+      { href: "/opportunites", label: "Opportunités", icone: Target },
+      { href: "/missions", label: "Missions", icone: Briefcase },
+      { href: "/projets", label: "Projets", icone: FolderKanban },
+      { href: "/recurrents", label: "Récurrents", icone: Repeat },
+    ],
+  },
+  {
+    titre: "Annuaire",
+    liens: [
+      { href: "/freelances", label: "Freelances", icone: Users },
+      { href: "/clients", label: "Clients", icone: Building2 },
+    ],
+  },
+  {
+    titre: "Analyse & Admin",
+    liens: [
+      { href: "/statistiques", label: "Pilotage", icone: BarChart3 },
+      { href: "/users", label: "Users", icone: UserCog },
+    ],
+  },
 ];
 
 function estActif(lien: Lien, pathname: string) {
@@ -49,35 +76,44 @@ function estActif(lien: Lien, pathname: string) {
 }
 
 function LiensNavigation({
-  liens,
+  sections,
   pathname,
   onNaviguer,
 }: {
-  liens: Lien[];
+  sections: Section[];
   pathname: string;
   onNaviguer?: () => void;
 }) {
   return (
     <>
-      {liens.map((lien) => {
-        const actif = estActif(lien, pathname);
-        const Icone = lien.icone;
-        return (
-          <Link
-            key={lien.href}
-            href={lien.href}
-            onClick={onNaviguer}
-            className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-              actif
-                ? "bg-primary font-medium text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            <Icone className="size-4 shrink-0" />
-            {lien.label}
-          </Link>
-        );
-      })}
+      {sections.map((section, index) => (
+        <div key={section.titre ?? `section-${index}`} className="flex flex-col gap-1">
+          {section.titre && (
+            <p className="px-3 pb-1 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
+              {section.titre}
+            </p>
+          )}
+          {section.liens.map((lien) => {
+            const actif = estActif(lien, pathname);
+            const Icone = lien.icone;
+            return (
+              <Link
+                key={lien.href}
+                href={lien.href}
+                onClick={onNaviguer}
+                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                  actif
+                    ? "bg-primary font-medium text-primary-foreground"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Icone className="size-4 shrink-0" />
+                {lien.label}
+              </Link>
+            );
+          })}
+        </div>
+      ))}
     </>
   );
 }
@@ -87,10 +123,13 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
   const [menuOuvert, setMenuOuvert] = useState(false);
   // On n'affiche que les liens autorisés par le rôle : Users réservé à l'admin,
   // et le commercial est restreint à ses pages (cf. peutAccederRoute).
-  const liens = LIENS.filter((lien) => {
-    if (lien.href === "/users") return peutGererUtilisateurs({ role });
-    return peutAccederRoute({ role }, lien.href);
-  });
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    liens: section.liens.filter((lien) => {
+      if (lien.href === "/users") return peutGererUtilisateurs({ role });
+      return peutAccederRoute({ role }, lien.href);
+    }),
+  })).filter((section) => section.liens.length > 0);
 
   // Filet de sécurité : referme le panneau mobile après chaque navigation
   // (ajustement d'état pendant le rendu, recommandé par React plutôt qu'un effet).
@@ -120,7 +159,7 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-3">
-          <LiensNavigation liens={liens} pathname={pathname} />
+          <LiensNavigation sections={sections} pathname={pathname} />
         </nav>
 
         {/* Bloc compte : icône en bas, menu au survol (Mon nom / Déconnexion). */}
@@ -193,7 +232,7 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 px-3">
-            <LiensNavigation liens={liens} pathname={pathname} onNaviguer={fermerMenu} />
+            <LiensNavigation sections={sections} pathname={pathname} onNaviguer={fermerMenu} />
           </nav>
 
           {/* Compte à plat : pas de menu au survol sur écran tactile. */}

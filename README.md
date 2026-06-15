@@ -137,12 +137,13 @@ forfait, le planning et la marge.
 
 Dans l'application : **Paramètres → Accès API (MCP) → Générer une clé**. La clé
 n'est affichée qu'une seule fois (seule son empreinte est stockée). Une clé hérite
-des droits du compte qui l'a créée : un compte **commercial** n'a pas accès aux
-coûts ni aux marges (les outils correspondants renvoient un refus), conformément à
-la gestion des rôles. Ne partagez pas votre clé ; révoquez-la si besoin depuis la
+des droits du compte qui l'a créée : pour un compte **commercial**, les coûts et
+les marges sont masqués dans les réponses, et les vues financières globales
+(`planning_du_mois`, `statistiques`) renvoient un refus — conformément à la
+gestion des rôles. Ne partagez pas votre clé ; révoquez-la si besoin depuis la
 même page.
 
-> La table `api_keys` est créée par la migration `0004_api_keys`. En production
+> La table `api_keys` est créée par la migration `0006_api_keys`. En production
 > Neon, elle s'applique automatiquement via `npm run db:migrate` (workflow
 > GitHub Actions sur `main`). En local : `npm run db:push`.
 

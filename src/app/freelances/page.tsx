@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
+import { peutVoirMarges } from "@/lib/auth/permissions";
 import { freelances, affectations } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
@@ -9,10 +10,13 @@ import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
   Table,
   TableBody,
+  TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatEuro } from "@/lib/format";
 import { FreelanceFormDialog } from "./freelance-form-dialog";
 import { FreelanceRow } from "./freelance-row";
 import { creerFreelance } from "./actions";
@@ -22,29 +26,36 @@ export default async function PageFreelances({
 }: {
   searchParams: Promise<{ vue?: string }>;
 }) {
-  await exigerSession();
+  const session = await exigerSession();
+  const voirMarges = peutVoirMarges(session);
   const { vue } = await searchParams;
   const archives = vue === "archives";
 
+  // Le « gain rapporté » est une marge (vente − achat) : ni calculé ni transmis
+  // au navigateur si l'utilisateur ne peut pas voir les marges (commercial).
   const [liste, affs] = await Promise.all([
     db
       .select()
       .from(freelances)
       .where(eq(freelances.actif, !archives))
       .orderBy(freelances.nom),
-    db
-      .select({
-        freelanceId: affectations.freelanceId,
-        tjmAchat: affectations.tjmAchat,
-        tjmVente: affectations.tjmVente,
-      })
-      .from(affectations),
+    voirMarges
+      ? db
+          .select({
+            freelanceId: affectations.freelanceId,
+            tjmAchat: affectations.tjmAchat,
+            tjmVente: affectations.tjmVente,
+          })
+          .from(affectations)
+      : Promise.resolve([]),
   ]);
   const gainParFreelance = new Map<number, number>();
   for (const a of affs) {
     const g = gainParFreelance.get(a.freelanceId) ?? 0;
     gainParFreelance.set(a.freelanceId, g + (Number(a.tjmVente) - Number(a.tjmAchat)));
   }
+  // Total du gain rapporté pour les freelances affichés (ligne de pied).
+  const totalGain = liste.reduce((s, f) => s + (gainParFreelance.get(f.id) ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -94,7 +105,7 @@ export default async function PageFreelances({
               <TableHeader>
                 <TableRow>
                   <TableHead>Nom</TableHead>
-                  <TableHead className="text-right">Gain rapporté</TableHead>
+                  {voirMarges ? <TableHead className="text-right">Gain rapporté</TableHead> : null}
                   {!archives ? <TableHead className="text-right">Planning</TableHead> : null}
                 </TableRow>
               </TableHeader>
@@ -104,11 +115,20 @@ export default async function PageFreelances({
                     key={freelance.id}
                     id={freelance.id}
                     nom={`${freelance.prenom} ${freelance.nom}`}
-                    gain={gainParFreelance.get(freelance.id) ?? 0}
+                    gain={voirMarges ? gainParFreelance.get(freelance.id) ?? 0 : undefined}
                     afficherPlanning={archives ? undefined : freelance.afficherPlanning}
                   />
                 ))}
               </TableBody>
+              {liste.length > 1 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell>Total</TableCell>
+                    <TableCell className="text-right">{formatEuro(totalGain)}</TableCell>
+                    {!archives ? <TableCell /> : null}
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           )}
         </CardContent>

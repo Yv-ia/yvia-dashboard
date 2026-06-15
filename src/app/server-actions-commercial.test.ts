@@ -25,6 +25,7 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 import * as freelances from "./freelances/actions";
 import * as missions from "./missions/actions";
 import * as projets from "./projets/actions";
+import * as recurrents from "./recurrents/actions";
 import * as planning from "./planning-actions";
 
 beforeEach(() => {
@@ -59,6 +60,9 @@ const actionsDelivery: Array<[string, (fd: FormData) => Promise<{ ok: boolean; m
   ["projets.marquerEncaissementRealise", projets.marquerEncaissementRealise],
   ["projets.definirFiabiliteProjet", projets.definirFiabiliteProjet],
   ["projets.ajouterJalon", projets.ajouterJalon],
+  ["recurrents.creerRecurrent", recurrents.creerRecurrent],
+  ["recurrents.modifierRecurrent", recurrents.modifierRecurrent],
+  ["recurrents.basculerActifRecurrent", recurrents.basculerActifRecurrent],
 ];
 
 describe("Server Actions delivery : refus du rôle commercial", () => {

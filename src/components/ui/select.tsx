@@ -22,7 +22,7 @@ function Select({
   onValueChange,
   triggerLabel,
 }: {
-  options: SelectOption[];
+  options: readonly SelectOption[];
   placeholder?: string;
   name?: string;
   id?: string;

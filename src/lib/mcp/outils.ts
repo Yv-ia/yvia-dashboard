@@ -64,8 +64,9 @@ function peutVoirMargesAuth(extra: AuthMcp): boolean {
 }
 
 const REFUS_MARGES = erreur(
-  "Accès refusé : ce rôle (commercial) ne peut pas consulter les coûts ni les marges. " +
-    "Outils accessibles : lister_clients, lister_freelances, rechercher."
+  "Accès refusé : les vues financières globales (planning_du_mois, statistiques) sont " +
+    "réservées aux rôles voyant les marges. Les autres outils restent accessibles ; pour le " +
+    "rôle commercial, les coûts et marges y sont simplement masqués."
 );
 
 // Combine des conditions optionnelles en un seul WHERE (undefined = pas de filtre).
@@ -106,6 +107,24 @@ function resumeTresorerie(
     totalDecaisse: eur(totalDecaisse),
     coutsPrevus: eur(coutsPrevus),
     margeRealisee: eur(totalEncaisse - totalDecaisse),
+  };
+}
+
+// Trésorerie exposée selon la visibilité des marges. Le rôle commercial ne voit
+// que le côté recette (encaissé, prévu de recette, reste à encaisser) ; les
+// coûts (décaissements) et la marge sont masqués.
+function tresoreriePublique(
+  t: ReturnType<typeof resumeTresorerie>,
+  resteAEncaisser: number,
+  voitMarges: boolean
+) {
+  return {
+    totalEncaisse: t.totalEncaisse,
+    recettesPrevues: t.recettesPrevues,
+    resteAEncaisser,
+    ...(voitMarges
+      ? { totalDecaisse: t.totalDecaisse, coutsPrevus: t.coutsPrevus, margeRealisee: t.margeRealisee }
+      : {}),
   };
 }
 
@@ -190,7 +209,7 @@ export function enregistrerOutils(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     async ({ inclure_inactives, freelance_id, client_id }, extra) => {
-      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
+      const voitMarges = peutVoirMargesAuth(extra);
       const where = combiner([
         inclure_inactives ? undefined : eq(missions.actif, true),
         freelance_id ? eq(missions.freelanceId, freelance_id) : undefined,
@@ -222,9 +241,11 @@ export function enregistrerOutils(server: McpServer): void {
         freelance: nomComplet(m.freelancePrenom, m.freelanceNom),
         clientId: m.clientId,
         client: m.clientNom,
-        tjmAchat: num(m.tjmAchat),
         tjmVente: num(m.tjmVente),
-        margeParJour: margeParJour(num(m.tjmAchat), num(m.tjmVente)),
+        // TJM achat et marge masqués au rôle commercial (cf. peutVoirMarges).
+        ...(voitMarges
+          ? { tjmAchat: num(m.tjmAchat), margeParJour: margeParJour(num(m.tjmAchat), num(m.tjmVente)) }
+          : {}),
         actif: m.actif,
       }));
       return json({ total: resultat.length, missions: resultat });
@@ -252,7 +273,7 @@ export function enregistrerOutils(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     async ({ inclure_inactifs, client_id, statut_commercial }, extra) => {
-      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
+      const voitMarges = peutVoirMargesAuth(extra);
       const where = combiner([
         inclure_inactifs ? undefined : eq(projets.actif, true),
         client_id ? eq(projets.clientId, client_id) : undefined,
@@ -301,8 +322,11 @@ export function enregistrerOutils(server: McpServer): void {
           actif: p.actif,
           statutCommercial: p.statutCommercial,
           statutCommercialLabel: labelStatutCommercial(p.statutCommercial),
-          ...tresorerie,
-          resteAEncaisser: eur(num(p.budget) - tresorerie.totalEncaisse),
+          ...tresoreriePublique(
+            tresorerie,
+            eur(num(p.budget) - tresorerie.totalEncaisse),
+            voitMarges
+          ),
         };
       });
       return json({ total: resultat.length, projets: resultat });
@@ -322,7 +346,7 @@ export function enregistrerOutils(server: McpServer): void {
       annotations: { readOnlyHint: true },
     },
     async ({ projet_id }, extra) => {
-      if (!peutVoirMargesAuth(extra)) return REFUS_MARGES;
+      const voitMarges = peutVoirMargesAuth(extra);
       const [p] = await db
         .select({
           id: projets.id,
@@ -402,15 +426,22 @@ export function enregistrerOutils(server: McpServer): void {
           statutCommercial: p.statutCommercial,
           statutCommercialLabel: labelStatutCommercial(p.statutCommercial),
         },
-        tresorerie: { ...tresorerie, resteAEncaisser: eur(num(p.budget) - tresorerie.totalEncaisse) },
-        evenements: evenements.map((e) => ({
-          type: e.type,
-          date: e.date,
-          libelle: e.libelle,
-          montant: e.montant !== null ? num(e.montant) : null,
-          prevu: e.prevu,
-          fiabilite: e.fiabilite,
-        })),
+        tresorerie: tresoreriePublique(
+          tresorerie,
+          eur(num(p.budget) - tresorerie.totalEncaisse),
+          voitMarges
+        ),
+        // Les décaissements (coûts freelances) sont masqués au rôle commercial.
+        evenements: evenements
+          .filter((e) => voitMarges || e.type !== "cout")
+          .map((e) => ({
+            type: e.type,
+            date: e.date,
+            libelle: e.libelle,
+            montant: e.montant !== null ? num(e.montant) : null,
+            prevu: e.prevu,
+            fiabilite: e.fiabilite,
+          })),
       });
     }
   );
