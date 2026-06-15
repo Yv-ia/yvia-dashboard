@@ -1,21 +1,26 @@
 import { db } from "@/db";
 import {
   affectations,
+  missions,
   projets,
   encaissements,
   decaissements,
   recurrents,
   opportunites,
+  todos,
 } from "@/db/schema";
-import { and, eq, gte, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
+import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculerPrevisionnel12Mois } from "./statistiques/previsionnel-calculs";
-import { formatEuro, formatPourcent } from "@/lib/format";
+import { calculerIndicateursMois } from "@/lib/rentabilite/indicateurs";
+import { formatEuro } from "@/lib/format";
 import { NavigationMois } from "./navigation-mois";
+import { EpicsCard } from "./todo/epics-card";
 import { exigerSession } from "@/lib/auth/server";
 
-export default async function PageDashboard({
+export default async function PageRentabilite({
   searchParams,
 }: {
   searchParams: Promise<{ annee?: string; mois?: string }>;
@@ -30,6 +35,11 @@ export default async function PageDashboard({
 
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
+  // Mois précédent (pour les écarts des KPI).
+  const moisPrec = mois === 1 ? 12 : mois - 1;
+  const anneePrec = mois === 1 ? annee - 1 : annee;
+  const debutMoisPrec = premierJourDuMois(anneePrec, moisPrec);
+  const finMoisPrec = dernierJourDuMois(anneePrec, moisPrec);
   const debutAnnee = `${annee}-01-01`;
   const finAnnee = `${annee}-12-31`;
 
@@ -42,42 +52,21 @@ export default async function PageDashboard({
     dateFin: recurrents.dateFin,
   };
 
-  // Données du mois affiché + sources annuelles du prévisionnel (CA par source).
-  const [encMois, decMois, affsAnnee, forfaitsGagnes, recsRegie, recsNonRegie] =
-    await Promise.all([
-    db
-      .select({ montant: encaissements.montant })
-      .from(encaissements)
-      .innerJoin(projets, eq(encaissements.projetId, projets.id))
-      .where(
-        and(
-          eq(encaissements.statut, "encaisse"), // réalisé uniquement (le prévu ne compte pas comme CA)
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(encaissements.date, debutMois),
-          lte(encaissements.date, finMois)
-        )
-      ),
-    db
-      .select({ montant: decaissements.montant })
-      .from(decaissements)
-      .innerJoin(projets, eq(decaissements.projetId, projets.id))
-      .where(
-        and(
-          eq(decaissements.statut, "decaisse"), // coût réalisé uniquement
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(decaissements.date, debutMois),
-          lte(decaissements.date, finMois)
-        )
-      ),
+  const [
+    affsAnnee,
+    forfaitsGagnes,
+    recsRegie,
+    recsNonRegie,
+    regieFenetre,
+    encFenetre,
+    decFenetre,
+    epics,
+  ] = await Promise.all([
     // --- Sources annuelles du prévisionnel (mêmes requêtes que /statistiques/previsionnel) ---
-    // Régie réel : tous les jours posés de l'année (date + TJM vente).
     db
       .select({ date: affectations.date, tjmVente: affectations.tjmVente })
       .from(affectations)
       .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
-    // Forfait : booking des deals forfait GAGNÉS, par mois de signature (date_gagne).
     db
       .select({ dateGagne: opportunites.dateGagne, montant: opportunites.montantEstime })
       .from(opportunites)
@@ -89,23 +78,77 @@ export default async function PageDashboard({
           lte(opportunites.dateGagne, finAnnee)
         )
       ),
-    // Régie macro : hypothèses (récurrents catégorie régie) → relais des mois non planifiés.
     db
       .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), eq(recurrents.categorie, "regie"))),
-    // Récurrence : contrats RUN / licence (la régie est portée par sa propre ligne).
     db
       .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
+    // --- Réalisé sur la fenêtre [mois précédent → mois affiché] pour les KPI ---
+    // Régie réelle : jours posés (CA = TJM vente, coût = TJM achat), par client.
+    db
+      .select({
+        clientId: missions.clientId,
+        date: affectations.date,
+        tjmVente: affectations.tjmVente,
+        tjmAchat: affectations.tjmAchat,
+      })
+      .from(affectations)
+      .innerJoin(missions, eq(affectations.missionId, missions.id))
+      .where(and(gte(affectations.date, debutMoisPrec), lte(affectations.date, finMois))),
+    // Forfait : encaissements réalisés (le prévu ne compte pas comme CA).
+    db
+      .select({
+        clientId: projets.clientId,
+        date: encaissements.date,
+        montant: encaissements.montant,
+      })
+      .from(encaissements)
+      .innerJoin(projets, eq(encaissements.projetId, projets.id))
+      .where(
+        and(
+          eq(encaissements.statut, "encaisse"),
+          eq(projets.actif, true),
+          ne(projets.statutCommercial, "perdu"),
+          gte(encaissements.date, debutMoisPrec),
+          lte(encaissements.date, finMois)
+        )
+      ),
+    // Forfait : décaissements réalisés (coût).
+    db
+      .select({
+        clientId: projets.clientId,
+        date: decaissements.date,
+        montant: decaissements.montant,
+      })
+      .from(decaissements)
+      .innerJoin(projets, eq(decaissements.projetId, projets.id))
+      .where(
+        and(
+          eq(decaissements.statut, "decaisse"),
+          eq(projets.actif, true),
+          ne(projets.statutCommercial, "perdu"),
+          gte(decaissements.date, debutMoisPrec),
+          lte(decaissements.date, finMois)
+        )
+      ),
+    // Epics (grosses to-do) pour le bloc de gauche.
+    db
+      .select({
+        id: todos.id,
+        titre: todos.titre,
+        description: todos.description,
+        statut: todos.statut,
+      })
+      .from(todos)
+      .where(eq(todos.epic, true))
+      .orderBy(asc(todos.ordre), asc(todos.id)),
   ]);
 
-  const arrondi = (n: number) => Math.round(n * 100) / 100;
-
   // CA prévisionnel de l'année, ventilé par source — calcul partagé avec la page
-  // /statistiques/previsionnel pour garantir des chiffres cohérents (régie = planning
-  // réel + hypothèse macro, forfait = booking des deals gagnés, récurrence = RUN/licence).
+  // /statistiques/previsionnel pour garantir des chiffres cohérents.
   const versRecurrentPrevisionnel = (r: (typeof recsRegie)[number]) => ({
     categorie: r.categorie,
     montantRecurrent: Number(r.montantRecurrent),
@@ -125,12 +168,21 @@ export default async function PageDashboard({
   const caMcoAnnee = previsionnel.recurrence;
   const caAnnuelTotal = previsionnel.total;
 
-  // Synthèse de trésorerie du mois (réalisé) : encaissé vs décaissé.
-  // Marge brute = ce qui est entré moins ce qui est sorti sur le mois.
-  const totalEncaisse = arrondi(encMois.reduce((s, e) => s + Number(e.montant), 0));
-  const coutTotal = arrondi(decMois.reduce((s, d) => s + Number(d.montant), 0));
-  const margeBrute = arrondi(totalEncaisse - coutTotal);
-  const tauxMarge = totalEncaisse > 0 ? margeBrute / totalEncaisse : 0;
+  // KPI du mois affiché, avec écart sur le mois précédent.
+  const indic = calculerIndicateursMois({
+    regie: regieFenetre,
+    encaissements: encFenetre,
+    decaissements: decFenetre,
+    debutMois,
+    finMois,
+  });
+  const indicPrec = calculerIndicateursMois({
+    regie: regieFenetre,
+    encaissements: encFenetre,
+    decaissements: decFenetre,
+    debutMois: debutMoisPrec,
+    finMois: finMoisPrec,
+  });
 
   return (
     <div className="space-y-6">
@@ -145,14 +197,12 @@ export default async function PageDashboard({
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 lg:grid-cols-3">
-            {/* Total mis en avant à gauche */}
             <div className="flex flex-col justify-center rounded-lg border border-primary/30 bg-primary/5 p-4">
               <p className="text-xs text-muted-foreground">Total {annee}</p>
               <p className="font-display text-3xl tabular-nums text-primary sm:text-4xl">
                 {formatEuro(caAnnuelTotal)}
               </p>
             </div>
-            {/* Détail par source, plus discret à droite */}
             <div className="grid gap-3 sm:grid-cols-3 lg:col-span-2">
               <LigneCaAnnuel titre="Régie" valeur={caRegieAnnee} />
               <LigneCaAnnuel titre="Forfait" valeur={caForfaitAnnee} />
@@ -162,42 +212,77 @@ export default async function PageDashboard({
         </CardContent>
       </Card>
 
-      {/* Indicateurs du mois affiché — coût global et rentabilité */}
-      <div className="grid grid-cols-2 gap-4">
-        <Indicateur titre="Coût global" valeur={formatEuro(coutTotal)} />
-        <Indicateur titre="Taux de marge brute" valeur={formatPourcent(tauxMarge)} />
+      {/* Écran coupé en deux : to-do (epics) à gauche, KPI clés du mois à droite */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <EpicsCard epics={epics} />
+
+        <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+          <KpiCard
+            titre="Clients actifs"
+            valeur={String(indic.clientsActifs)}
+            diff={indic.clientsActifs - indicPrec.clientsActifs}
+            format={(n) => String(n)}
+          />
+          <KpiCard
+            titre="CA moyen / client"
+            valeur={formatEuro(indic.caParClient)}
+            diff={indic.caParClient - indicPrec.caParClient}
+            format={formatEuro}
+          />
+          <KpiCard
+            titre="Marge brute globale"
+            valeur={formatEuro(indic.margeBrute)}
+            diff={indic.margeBrute - indicPrec.margeBrute}
+            format={formatEuro}
+          />
+        </div>
       </div>
     </div>
   );
 }
 
-function LigneCaAnnuel({
-  titre,
-  valeur,
-  accent = false,
-}: {
-  titre: string;
-  valeur: number;
-  accent?: boolean;
-}) {
+function LigneCaAnnuel({ titre, valeur }: { titre: string; valeur: number }) {
   return (
-    <div className={`rounded-lg border p-3 ${accent ? "border-primary/30 bg-primary/5" : ""}`}>
+    <div className="rounded-lg border p-3">
       <p className="text-xs text-muted-foreground">{titre}</p>
-      <p className={`font-display text-xl tabular-nums ${accent ? "text-primary" : ""}`}>
-        {formatEuro(valeur)}
-      </p>
+      <p className="font-display text-xl tabular-nums">{formatEuro(valeur)}</p>
     </div>
   );
 }
 
-function Indicateur({ titre, valeur }: { titre: string; valeur: string }) {
+// Carte d'un KPI clé : valeur du mois + écart vs mois précédent (flèche + couleur).
+function KpiCard({
+  titre,
+  valeur,
+  diff,
+  format,
+}: {
+  titre: string;
+  valeur: string;
+  diff: number;
+  format: (n: number) => string;
+}) {
+  const positif = diff > 0;
+  const negatif = diff < 0;
+  const Icone = positif ? ArrowUp : negatif ? ArrowDown : Minus;
+  const couleur = positif ? "text-emerald-600" : negatif ? "text-rose-600" : "text-muted-foreground";
+  const signe = positif ? "+" : negatif ? "−" : "";
+
   return (
     <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-xs font-normal text-muted-foreground">{titre}</CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-1">
         <p className="font-display text-2xl sm:text-3xl">{valeur}</p>
+        <p className={`flex items-center gap-1 text-xs ${couleur}`}>
+          <Icone className="size-3.5" />
+          <span className="tabular-nums">
+            {signe}
+            {format(Math.abs(diff))}
+          </span>
+          <span className="text-muted-foreground">vs mois précédent</span>
+        </p>
       </CardContent>
     </Card>
   );

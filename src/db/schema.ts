@@ -213,6 +213,19 @@ export const recurrents = pgTable("recurrents", {
   actif: boolean("actif").notNull().default(true),
 });
 
+// --- TO-DO (chantiers de pilotage) ---
+// Liste d'actions de pilotage, indépendante du métier (clients, missions…).
+// Les « epics » (grosses to-do) remontent sur le dashboard Rentabilité ; la page
+// /todo gère l'ensemble. `ordre` permet un tri manuel stable.
+export const todos = pgTable("todos", {
+  id: serial("id").primaryKey(),
+  titre: text("titre").notNull(),
+  description: text("description"), // détail optionnel
+  statut: text("statut").notNull().default("a_faire"), // 'a_faire' | 'en_cours' | 'fait'
+  epic: boolean("epic").notNull().default(false), // grosse to-do affichée sur le dashboard
+  ordre: integer("ordre").notNull().default(0),
+});
+
 // --- DECAISSEMENTS / ÉCHÉANCIER DE COÛT (versé à un freelance, rattaché à un projet) ---
 // statut='decaisse' = déjà versé (réalisé), statut='prevu' = coût à venir.
 // Pas de fiabilité côté coût : un coût engagé est considéré certain (100 %).
