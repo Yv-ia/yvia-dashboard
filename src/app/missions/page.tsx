@@ -5,13 +5,12 @@ import { missions, freelances, clients, affectations } from "@/db/schema";
 import { and, eq, gte, lte } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ListViewToolbar } from "@/components/list-view-toolbar";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { formatEuro, formatMois } from "@/lib/format";
 import { NavigationMois } from "../navigation-mois";
+import { OngletsRegie } from "../regie/onglets-regie";
 import { MissionFormDialog } from "./mission-form-dialog";
-import { HypotheseRegieDialog } from "./hypothese-regie-dialog";
-import { SaisirJoursDialog } from "./saisir-jours-dialog";
+import { ReporterMoisDialog } from "./reporter-mois-dialog";
 import { RegieMensuelleBoard } from "./regie-mensuelle-board";
 import { agregerRegieMensuelle, type AffectationRegie } from "@/lib/missions/regie-mensuelle";
 import { creerMission } from "./actions";
@@ -31,8 +30,10 @@ export default async function PageRegie({
   const mois = moisParam >= 1 && moisParam <= 12 ? moisParam : maintenant.getUTCMonth() + 1;
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
+  const prevAnnee = mois === 1 ? annee - 1 : annee;
+  const prevMois = mois === 1 ? 12 : mois - 1;
 
-  const [affs, freelancesActifs, clientsActifs, missionsActives] = await Promise.all([
+  const [affs, freelancesActifs, clientsActifs] = await Promise.all([
     // CA régie du mois = somme des TJM des affectations posées ce mois-ci (varie
     // selon les jours/congés). Le TJM achat (marge) n'est ni lu ni transmis au
     // commercial. Une affectation référence sa mission, son client et son freelance.
@@ -63,56 +64,35 @@ export default async function PageRegie({
       .from(clients)
       .where(eq(clients.actif, true))
       .orderBy(clients.nom),
-    // Régies actives : cible du déclencheur « saisir des jours ».
-    db
-      .select({
-        id: missions.id,
-        nom: missions.nom,
-        clientNom: clients.nom,
-        freelancePrenom: freelances.prenom,
-        freelanceNom: freelances.nom,
-      })
-      .from(missions)
-      .innerJoin(clients, eq(missions.clientId, clients.id))
-      .innerJoin(freelances, eq(missions.freelanceId, freelances.id))
-      .where(eq(missions.actif, true))
-      .orderBy(missions.nom),
   ]);
 
   const synthese = agregerRegieMensuelle(affs as AffectationRegie[]);
-  const regies = missionsActives.map((m) => ({
-    id: m.id,
-    label: `${m.nom} · ${m.clientNom} · ${m.freelancePrenom} ${m.freelanceNom}`,
-  }));
 
   return (
     <div className="space-y-6">
-      <ListViewToolbar
-        action={
-          <div className="flex flex-wrap gap-2">
-            <SaisirJoursDialog
-              regies={regies}
-              annee={annee}
-              mois={mois}
-              libelleMois={formatMois(annee, mois)}
-              trigger={<Button variant="outline">Saisir des jours</Button>}
-            />
-            <HypotheseRegieDialog
-              clientsListe={clientsActifs}
-              trigger={<Button variant="outline">Hypothèse régie</Button>}
-            />
-            <MissionFormDialog
-              action={creerMission}
-              titre="Nouvelle régie"
-              freelancesActifs={freelancesActifs}
-              clientsListe={clientsActifs}
-              trigger={<Button>Nouvelle régie</Button>}
-            />
-          </div>
-        }
-      >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <OngletsRegie actif="planning" />
         <NavigationMois basePath="/missions" annee={annee} mois={mois} />
-      </ListViewToolbar>
+      </div>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {voirMarges ? (
+          <ReporterMoisDialog
+            annee={annee}
+            mois={mois}
+            libelleMois={formatMois(annee, mois)}
+            libelleMoisPrecedent={formatMois(prevAnnee, prevMois)}
+            trigger={<Button variant="outline">Dupliquer le mois précédent</Button>}
+          />
+        ) : null}
+        <MissionFormDialog
+          action={creerMission}
+          titre="Ajouter un freelance"
+          freelancesActifs={freelancesActifs}
+          clientsListe={clientsActifs}
+          trigger={<Button>Ajouter un freelance</Button>}
+        />
+      </div>
 
       {/* Synthèse du CA régie du mois affiché */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">

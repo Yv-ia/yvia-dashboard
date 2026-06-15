@@ -16,12 +16,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import {
-  CATEGORIES_RECURRENT,
-  CATEGORIE_RECURRENT_DEFAUT,
-  coutDerivePlanning,
-} from "@/lib/recurrents/categorie";
+import { CATEGORIES_RECURRENT, coutDerivePlanning } from "@/lib/recurrents/categorie";
 import type { Resultat } from "./actions";
+
+// La régie n'est pas un contrat MCO : elle se gère via les hypothèses de régie
+// (page /regie). Le formulaire MCO ne propose donc que RUN / licence.
+const CATEGORIES_MCO = CATEGORIES_RECURRENT.filter((c) => c.key !== "regie");
+const CATEGORIE_MCO_DEFAUT = CATEGORIES_MCO[0].key;
 
 type Recurrent = {
   id: number;
@@ -48,7 +49,7 @@ export function RecurrentFormDialog({
   trigger: React.ReactElement;
 }) {
   const [open, setOpen] = useState(false);
-  const [categorie, setCategorie] = useState(recurrent?.categorie ?? CATEGORIE_RECURRENT_DEFAUT);
+  const [categorie, setCategorie] = useState(recurrent?.categorie ?? CATEGORIE_MCO_DEFAUT);
   const coutManuel = !coutDerivePlanning(categorie);
 
   return (
@@ -101,7 +102,7 @@ export function RecurrentFormDialog({
               name="categorie"
               value={categorie}
               onValueChange={setCategorie}
-              options={CATEGORIES_RECURRENT.map((c) => ({ value: c.key, label: c.label }))}
+              options={CATEGORIES_MCO.map((c) => ({ value: c.key, label: c.label }))}
             />
           </div>
 

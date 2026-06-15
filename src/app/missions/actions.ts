@@ -3,7 +3,7 @@
 
 import { db } from "@/db";
 import { missions, affectations, clients } from "@/db/schema";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, lte, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { exigerDelivery } from "@/lib/auth/garde";
 import {
@@ -179,6 +179,89 @@ export async function genererJoursRegie(formData: FormData): Promise<Resultat> {
       );
     }
   });
+
+  revalidatePath("/missions");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Report du mois précédent : reprend les régies facturées le mois dernier et pose
+// le même nombre de jours sur le mois cible (mêmes freelances, TJM figés depuis la
+// mission). On ne touche qu'aux régies SANS jours sur le mois cible (idempotent :
+// relancer ne double pas). Les jours déjà occupés par le freelance sont sautés.
+export async function reporterMoisPrecedent(formData: FormData): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
+  const annee = Number(formData.get("annee"));
+  const moisNum = Number(formData.get("mois"));
+  if (!annee || moisNum < 1 || moisNum > 12) return { ok: false, message: "Mois invalide." };
+
+  const prevAnnee = moisNum === 1 ? annee - 1 : annee;
+  const prevMois = moisNum === 1 ? 12 : moisNum - 1;
+  const debutPrev = premierJourDuMois(prevAnnee, prevMois);
+  const finPrev = dernierJourDuMois(prevAnnee, prevMois);
+  const debutCur = premierJourDuMois(annee, moisNum);
+  const finCur = dernierJourDuMois(annee, moisNum);
+  const joursOuvresCur = listeJoursOuvresDuMois(annee, moisNum);
+
+  // Jours facturés le mois précédent, par régie (compte des jours distincts).
+  const prevAffs = await db
+    .select({ missionId: affectations.missionId, date: affectations.date })
+    .from(affectations)
+    .innerJoin(missions, eq(affectations.missionId, missions.id))
+    .where(and(eq(missions.actif, true), gte(affectations.date, debutPrev), lte(affectations.date, finPrev)));
+
+  const joursParMission = new Map<number, Set<string>>();
+  for (const a of prevAffs) {
+    (joursParMission.get(a.missionId) ?? joursParMission.set(a.missionId, new Set()).get(a.missionId)!).add(a.date);
+  }
+  if (joursParMission.size === 0) {
+    return { ok: false, message: "Aucune régie facturée le mois précédent." };
+  }
+
+  // État du mois cible : régies déjà posées + jours occupés par freelance.
+  const curAffs = await db
+    .select({
+      missionId: affectations.missionId,
+      freelanceId: affectations.freelanceId,
+      date: affectations.date,
+    })
+    .from(affectations)
+    .where(and(gte(affectations.date, debutCur), lte(affectations.date, finCur)));
+  const dejaPosees = new Set(curAffs.map((a) => a.missionId));
+  const occupeParFreelance = new Map<number, Set<string>>();
+  for (const a of curAffs) {
+    (occupeParFreelance.get(a.freelanceId) ?? occupeParFreelance.set(a.freelanceId, new Set()).get(a.freelanceId)!).add(a.date);
+  }
+
+  const aReporter = [...joursParMission.keys()].filter((id) => !dejaPosees.has(id));
+  if (aReporter.length === 0) {
+    return { ok: false, message: "Toutes les régies du mois précédent sont déjà posées ce mois-ci." };
+  }
+
+  const ms = await db
+    .select({
+      id: missions.id,
+      freelanceId: missions.freelanceId,
+      tjmAchat: missions.tjmAchat,
+      tjmVente: missions.tjmVente,
+    })
+    .from(missions)
+    .where(inArray(missions.id, aReporter));
+
+  const aInserer: (typeof affectations.$inferInsert)[] = [];
+  for (const m of ms) {
+    const nbJours = joursParMission.get(m.id)?.size ?? 0;
+    const pris = occupeParFreelance.get(m.freelanceId) ?? new Set<string>();
+    const cibles = joursOuvresCur.filter((d) => !pris.has(d)).slice(0, nbJours);
+    for (const date of cibles) {
+      aInserer.push({ missionId: m.id, freelanceId: m.freelanceId, date, tjmAchat: m.tjmAchat, tjmVente: m.tjmVente });
+      pris.add(date);
+    }
+    occupeParFreelance.set(m.freelanceId, pris);
+  }
+  if (aInserer.length > 0) await db.insert(affectations).values(aInserer);
 
   revalidatePath("/missions");
   revalidatePath("/");
