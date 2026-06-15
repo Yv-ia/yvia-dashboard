@@ -49,6 +49,7 @@ const ROUTES_COMMERCIAL = [
   "/clients",
   "/parametres",
   "/opportunites",
+  "/regie",
   "/missions",
   "/projets",
   "/freelances",

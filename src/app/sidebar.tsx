@@ -49,7 +49,7 @@ const SECTIONS: Section[] = [
     titre: "Activité",
     liens: [
       { href: "/opportunites", label: "Opportunités", icone: Target },
-      { href: "/missions", label: "Régie", icone: Briefcase },
+      { href: "/regie", label: "Régie", icone: Briefcase, match: ["/regie", "/missions"] },
       { href: "/recurrents", label: "Maintenance MCO", icone: Repeat },
     ],
   },

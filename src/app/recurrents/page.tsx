@@ -2,7 +2,7 @@ import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
 import { recurrents, clients } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
@@ -41,7 +41,9 @@ export default async function PageRecurrents({
       })
       .from(recurrents)
       .innerJoin(clients, eq(recurrents.clientId, clients.id))
-      .where(eq(recurrents.actif, !archives))
+      // La régie n'est PAS du MCO : ses hypothèses se gèrent sur la page Régie
+      // (/regie). On les exclut donc de la vue Maintenance / MCO.
+      .where(and(eq(recurrents.actif, !archives), ne(recurrents.categorie, "regie")))
       .orderBy(recurrents.nom),
     db
       .select({ id: clients.id, nom: clients.nom })
