@@ -3,16 +3,14 @@ import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
-import { ProjetFormDialog } from "@/app/projets/projet-form-dialog";
-import { creerProjet } from "@/app/projets/actions";
 import {
   TresorerieEcheances,
   type EcheanceTresorerie,
   type ProjetComplet,
 } from "./tresorerie-echeances";
+import { EncaissementsParDeal, type DealEncaissement } from "./encaissements-par-deal";
 
 const ONGLETS = [
   { cle: "encaissements", label: "Encaissements" },
@@ -30,8 +28,7 @@ export default async function PageTresorerie({
   const aujourdhui = new Date().toISOString().slice(0, 10);
 
   // Trésorerie = échéancier des projets ACTIFS (entrées client / sorties freelances).
-  const [projetsRows, encRows, decRows, jalRows, clientsListe, freelancesActifs] =
-    await Promise.all([
+  const [projetsRows, encRows, decRows, jalRows, freelancesActifs] = await Promise.all([
       db
         .select({
           id: projets.id,
@@ -74,11 +71,6 @@ export default async function PageTresorerie({
       db
         .select({ id: jalons.id, projetId: jalons.projetId, date: jalons.date, libelle: jalons.libelle })
         .from(jalons),
-      db
-        .select({ id: clients.id, nom: clients.nom })
-        .from(clients)
-        .where(eq(clients.actif, true))
-        .orderBy(clients.nom),
       db
         .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
         .from(freelances)
@@ -132,47 +124,54 @@ export default async function PageTresorerie({
     projetsParId[j.projetId]?.jalons.push({ id: j.id, date: j.date, libelle: j.libelle });
   }
 
-  // Échéances de l'onglet affiché (projets actifs uniquement), triées par date.
-  const echeances: EcheanceTresorerie[] = (
-    type === "encaissement"
-      ? encRows.map((e) => ({
-          id: e.id,
-          projetId: e.projetId,
-          date: e.date,
-          montant: e.montant,
-          libelle: e.libelle,
-          statut: e.statut,
-          freelanceNom: null as string | null,
-        }))
-      : decRows.map((d) => ({
-          id: d.id,
-          projetId: d.projetId,
-          date: d.date,
-          montant: d.montant,
-          libelle: d.libelle,
-          statut: d.statut,
-          freelanceNom: `${d.prenom} ${d.nom}`,
-        }))
-  )
-    .filter((e) => projetsActifs.has(e.projetId))
-    .map((e) => {
-      const p = projetsActifs.get(e.projetId)!;
-      return { ...e, projetNom: p.nom, clientId: p.clientId, clientNom: p.clientNom };
+  const arrondi = (n: number) => Math.round(n * 100) / 100;
+
+  // Encaissements = vue PAR DEAL forfait gagné (un projet = un deal). Statut CALCULÉ
+  // à partir de l'encaissé réel (Σ encaissements hors prévu) vs le CA (budget).
+  const deals: DealEncaissement[] = projetsRows.map((p) => {
+    const encaisse = arrondi(
+      (projetsParId[p.id]?.encaissements ?? [])
+        .filter((e) => e.statut !== "prevu")
+        .reduce((s, e) => s + Number(e.montant), 0)
+    );
+    const ca = Number(p.budget);
+    const statut: DealEncaissement["statut"] =
+      encaisse <= 0 ? "non" : encaisse >= ca ? "total" : "partiel";
+    return {
+      projetId: p.id,
+      projetNom: p.nom,
+      clientId: p.clientId,
+      clientNom: p.clientNom,
+      ca,
+      encaisse,
+      reste: arrondi(Math.max(0, ca - encaisse)),
+      statut,
+    };
+  });
+
+  // Décaissements = échéancier (par échéance) des projets actifs, trié par date.
+  const echeancesDec: EcheanceTresorerie[] = decRows
+    .filter((d) => projetsActifs.has(d.projetId))
+    .map((d) => {
+      const p = projetsActifs.get(d.projetId)!;
+      return {
+        id: d.id,
+        projetId: d.projetId,
+        projetNom: p.nom,
+        clientId: p.clientId,
+        clientNom: p.clientNom,
+        date: d.date,
+        montant: d.montant,
+        libelle: d.libelle,
+        statut: d.statut,
+        freelanceNom: `${d.prenom} ${d.nom}`,
+      };
     })
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return (
     <div className="space-y-6">
-      <ListViewToolbar
-        action={
-          <ProjetFormDialog
-            action={creerProjet}
-            titre="Nouveau projet forfait"
-            clientsListe={clientsListe}
-            trigger={<Button>Nouveau projet forfait</Button>}
-          />
-        }
-      >
+      <ListViewToolbar action={null}>
         {ONGLETS.map((o) => (
           <Link
             key={o.cle}
@@ -193,13 +192,21 @@ export default async function PageTresorerie({
           <CardTitle>{type === "encaissement" ? "Encaissements" : "Décaissements"}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <TresorerieEcheances
-            type={type}
-            echeances={echeances}
-            projetsParId={projetsParId}
-            freelancesActifs={freelancesActifs}
-            aujourdhui={aujourdhui}
-          />
+          {type === "encaissement" ? (
+            <EncaissementsParDeal
+              deals={deals}
+              projetsParId={projetsParId}
+              freelancesActifs={freelancesActifs}
+            />
+          ) : (
+            <TresorerieEcheances
+              type="decaissement"
+              echeances={echeancesDec}
+              projetsParId={projetsParId}
+              freelancesActifs={freelancesActifs}
+              aujourdhui={aujourdhui}
+            />
+          )}
         </CardContent>
       </Card>
     </div>
