@@ -212,11 +212,20 @@ export default async function PageDashboard({
           <CardTitle className="text-sm font-medium">CA prévisionnel {annee}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-3 sm:grid-cols-4">
-            <LigneCaAnnuel titre="Régie" valeur={caRegieAnnee} />
-            <LigneCaAnnuel titre="Forfait" valeur={caForfaitAnnee} />
-            <LigneCaAnnuel titre="Maintenance MCO" valeur={caMcoAnnee} />
-            <LigneCaAnnuel titre="Total" valeur={caAnnuelTotal} accent />
+          <div className="grid gap-4 lg:grid-cols-3">
+            {/* Total mis en avant à gauche */}
+            <div className="flex flex-col justify-center rounded-lg border border-primary/30 bg-primary/5 p-4">
+              <p className="text-xs text-muted-foreground">Total {annee}</p>
+              <p className="font-display text-3xl tabular-nums text-primary sm:text-4xl">
+                {formatEuro(caAnnuelTotal)}
+              </p>
+            </div>
+            {/* Détail par source, plus discret à droite */}
+            <div className="grid gap-3 sm:grid-cols-3 lg:col-span-2">
+              <LigneCaAnnuel titre="Régie" valeur={caRegieAnnee} />
+              <LigneCaAnnuel titre="Forfait" valeur={caForfaitAnnee} />
+              <LigneCaAnnuel titre="Maintenance MCO" valeur={caMcoAnnee} />
+            </div>
           </div>
         </CardContent>
       </Card>
