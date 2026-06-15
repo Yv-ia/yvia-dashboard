@@ -1,8 +1,7 @@
 import Link from "next/link";
-import { Users, Wallet, Banknote, ArrowRight, type LucideIcon } from "lucide-react";
+import { Wallet, Banknote, ArrowRight, type LucideIcon } from "lucide-react";
 import { db } from "@/db";
 import {
-  freelances,
   clients,
   affectations,
   projets,
@@ -43,22 +42,12 @@ export default async function PageDashboard({
   const finAnnee = `${annee}-12-31`;
 
   // Données du mois affiché + agrégats annuels (CA prévisionnel par source).
-  const [
-    affs,
-    encMois,
-    decMois,
-    freelancesActifs,
-    encPrevus,
-    decPrevus,
-    affsAnnee,
-    encAnnee,
-    recurrentsAnnee,
-  ] = await Promise.all([
-    // Régie : chaque jour affecté porte son propre TJM (figé à la pose). On n'a
-    // besoin que des TJM (KPI) et du freelance (encart « non staffés »).
+  const [affs, encMois, decMois, encPrevus, decPrevus, affsAnnee, encAnnee, recurrentsAnnee] =
+    await Promise.all([
+    // Régie du mois : chaque jour affecté porte son propre TJM (figé à la pose).
+    // On somme les TJM pour les KPI du mois.
     db
       .select({
-        freelanceId: affectations.freelanceId,
         tjmAchat: affectations.tjmAchat,
         tjmVente: affectations.tjmVente,
       })
@@ -90,12 +79,7 @@ export default async function PageDashboard({
           lte(decaissements.date, finMois)
         )
       ),
-    // --- Données des encarts d'alerte ---
-    db
-      .select({ id: freelances.id, prenom: freelances.prenom, nom: freelances.nom })
-      .from(freelances)
-      .where(eq(freelances.actif, true))
-      .orderBy(freelances.nom),
+    // --- Données des encarts d'alerte (prévisionnel de trésorerie du mois) ---
     db
       .select({
         id: encaissements.id,
@@ -215,9 +199,7 @@ export default async function PageDashboard({
   const totalMarge = arrondi(totalCa - totalCout);
   const tauxMarge = totalCa > 0 ? totalMarge / totalCa : 0;
 
-  // --- Encarts d'alerte (tout est cadré sur le mois affiché) ---
-  const freelancesAvecJours = new Set(affs.map((a) => a.freelanceId));
-  const freelancesNonStaffes = freelancesActifs.filter((f) => !freelancesAvecJours.has(f.id));
+  // --- Encarts du prévisionnel de trésorerie (cadrés sur le mois affiché) ---
   const totalEncPrevus = encPrevus.reduce((s, e) => s + Number(e.montant), 0);
   const totalDecPrevus = decPrevus.reduce((s, d) => s + Number(d.montant), 0);
 
@@ -227,15 +209,7 @@ export default async function PageDashboard({
         <NavigationMois basePath="/" annee={annee} mois={mois} />
       </div>
 
-      {/* Indicateurs du mois affiché */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Indicateur titre="CA prévisionnel" valeur={formatEuro(totalCa)} />
-        <Indicateur titre="Coût total" valeur={formatEuro(totalCout)} />
-        <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
-        <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
-      </div>
-
-      {/* CA prévisionnel de l'année, ventilé par source */}
+      {/* CA prévisionnel de l'année, ventilé par source — mis en tête du tableau de bord */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium">CA prévisionnel {annee}</CardTitle>
@@ -250,8 +224,16 @@ export default async function PageDashboard({
         </CardContent>
       </Card>
 
-      {/* Points d'attention : le prévisionnel de trésorerie + les freelances à staffer */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {/* Indicateurs du mois affiché */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Indicateur titre="CA prévisionnel" valeur={formatEuro(totalCa)} />
+        <Indicateur titre="Coût total" valeur={formatEuro(totalCout)} />
+        <Indicateur titre="Marge totale" valeur={formatEuro(totalMarge)} />
+        <Indicateur titre="Taux de marge" valeur={formatPourcent(tauxMarge)} />
+      </div>
+
+      {/* Prévisionnel de trésorerie du mois */}
+      <div className="grid gap-4 sm:grid-cols-2">
         <EncartAlerte
           icone={Wallet}
           titre="Encaissements prévus"
@@ -285,23 +267,6 @@ export default async function PageDashboard({
             secondaire: `${formatDate(d.date)} · ${formatEuro(Number(d.montant))}`,
           }))}
           reste={decPrevus.length - Math.min(decPrevus.length, 4)}
-        />
-        <EncartAlerte
-          icone={Users}
-          titre="Freelances non staffés"
-          sousTitre="aucune affectation ce mois"
-          compte={freelancesNonStaffes.length}
-          lienHref="/planning"
-          lienLabel="Ouvrir le planning"
-          videLabel="Tous les freelances actifs sont staffés."
-          items={freelancesNonStaffes.slice(0, 4).map((f) => ({
-            cle: `f${f.id}`,
-            type: "freelance" as TypeEntite,
-            id: f.id,
-            principal: `${f.prenom} ${f.nom}`,
-            secondaire: null,
-          }))}
-          reste={freelancesNonStaffes.length - Math.min(freelancesNonStaffes.length, 4)}
         />
       </div>
     </div>

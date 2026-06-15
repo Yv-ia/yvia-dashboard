@@ -80,7 +80,7 @@ export function MissionFormDialog({
           freelanceIdInitial={freelanceIdInitial}
           clientIdInitial={clientIdInitial}
           onSucces={() => {
-            toast.success("Mission enregistrée.");
+            toast.success("Régie enregistrée.");
             setOpen(false);
           }}
         />
@@ -142,7 +142,7 @@ function FormulaireMission({
       {mission ? <input type="hidden" name="id" value={mission.id} /> : null}
 
       <div className="space-y-2">
-        <Label htmlFor="nom">Nom de la mission *</Label>
+        <Label htmlFor="nom">Nom de la régie *</Label>
         <Input id="nom" name="nom" defaultValue={mission?.nom ?? ""} required />
       </div>
 

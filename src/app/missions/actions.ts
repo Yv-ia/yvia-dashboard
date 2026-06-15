@@ -3,9 +3,14 @@
 
 import { db } from "@/db";
 import { missions, affectations, clients } from "@/db/schema";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, lte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { exigerDelivery } from "@/lib/auth/garde";
+import {
+  premierJourDuMois,
+  dernierJourDuMois,
+  listeJoursOuvresDuMois,
+} from "@/lib/calculs/jours-ouvres";
 
 export type MissionCree = {
   id: number;
@@ -99,6 +104,81 @@ export async function modifierMission(formData: FormData): Promise<Resultat> {
       .set({ tjmAchat: champs.valeurs.tjmAchat, tjmVente: champs.valeurs.tjmVente })
       .where(and(eq(affectations.missionId, id), gte(affectations.date, aujourdhui)));
   }
+
+  revalidatePath("/missions");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+// Génère le planning d'une régie pour un mois à partir d'un simple nombre de jours
+// (déclencheur « facture » : pas de saisie jour par jour). Idempotent : on remet à
+// zéro les jours de cette régie sur le mois, puis on (re)pose nbJours jours ouvrés où
+// le freelance est libre (les jours déjà pris par une autre mission sont sautés). Le
+// TJM est figé depuis la mission, comme dans le planning.
+export async function genererJoursRegie(formData: FormData): Promise<Resultat> {
+  const session = await verifierConnecte();
+  if (!session.ok) return session;
+
+  const missionId = Number(formData.get("missionId"));
+  const annee = Number(formData.get("annee"));
+  const moisNum = Number(formData.get("mois"));
+  const nbJours = Number(formData.get("nbJours"));
+
+  if (!missionId) return { ok: false, message: "La régie est obligatoire." };
+  if (!annee || moisNum < 1 || moisNum > 12) return { ok: false, message: "Mois invalide." };
+  if (!Number.isFinite(nbJours) || nbJours < 0) {
+    return { ok: false, message: "Nombre de jours invalide." };
+  }
+
+  const [m] = await db
+    .select({
+      freelanceId: missions.freelanceId,
+      tjmAchat: missions.tjmAchat,
+      tjmVente: missions.tjmVente,
+    })
+    .from(missions)
+    .where(eq(missions.id, missionId));
+  if (!m) return { ok: false, message: "Régie introuvable." };
+
+  const debut = premierJourDuMois(annee, moisNum);
+  const fin = dernierJourDuMois(annee, moisNum);
+  const joursOuvres = listeJoursOuvresDuMois(annee, moisNum);
+
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(affectations)
+      .where(
+        and(
+          eq(affectations.missionId, missionId),
+          gte(affectations.date, debut),
+          lte(affectations.date, fin)
+        )
+      );
+    // Jours du mois déjà occupés par ce freelance sur une AUTRE mission (1 mission/jour).
+    const occupes = await tx
+      .select({ date: affectations.date })
+      .from(affectations)
+      .where(
+        and(
+          eq(affectations.freelanceId, m.freelanceId),
+          gte(affectations.date, debut),
+          lte(affectations.date, fin)
+        )
+      );
+    const pris = new Set(occupes.map((o) => o.date));
+    const cibles = joursOuvres.filter((d) => !pris.has(d)).slice(0, nbJours);
+    if (cibles.length > 0) {
+      await tx.insert(affectations).values(
+        cibles.map((date) => ({
+          missionId,
+          freelanceId: m.freelanceId,
+          date,
+          tjmAchat: m.tjmAchat,
+          tjmVente: m.tjmVente,
+        }))
+      );
+    }
+  });
 
   revalidatePath("/missions");
   revalidatePath("/");
