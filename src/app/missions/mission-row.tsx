@@ -19,7 +19,15 @@ export type LigneMission = {
   actif: boolean;
 };
 
-export function MissionRow({ l, voirMarges }: { l: LigneMission; voirMarges: boolean }) {
+export function MissionRow({
+  l,
+  voirMarges,
+  masquerClient = false,
+}: {
+  l: LigneMission;
+  voirMarges: boolean;
+  masquerClient?: boolean; // true en vue groupée par client : la colonne Client est portée par l'en-tête du groupe
+}) {
   const { ouvrir } = useDrawer();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -34,11 +42,13 @@ export function MissionRow({ l, voirMarges }: { l: LigneMission; voirMarges: boo
           {l.freelancePrenom} {l.freelanceNom}
         </EntityLink>
       </TableCell>
-      <TableCell onClick={stop}>
-        <EntityLink type="client" id={l.clientId} className="hover:text-primary hover:underline">
-          {l.clientNom}
-        </EntityLink>
-      </TableCell>
+      {masquerClient ? null : (
+        <TableCell onClick={stop}>
+          <EntityLink type="client" id={l.clientId} className="hover:text-primary hover:underline">
+            {l.clientNom}
+          </EntityLink>
+        </TableCell>
+      )}
       {voirMarges ? (
         <TableCell className="text-right">{formatEuro(Number(l.tjmAchat))}</TableCell>
       ) : null}

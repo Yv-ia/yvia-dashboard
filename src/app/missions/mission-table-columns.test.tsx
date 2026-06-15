@@ -23,11 +23,13 @@ const mission: LigneMission = {
   actif: true,
 };
 
+// Vue groupée par client : la colonne Client est portée par l'en-tête du groupe,
+// les lignes de détail la masquent (masquerClient).
 function rendre(voirMarges: boolean) {
   return renderToStaticMarkup(
     <table>
       <tbody>
-        <MissionRow l={mission} voirMarges={voirMarges} />
+        <MissionRow l={mission} voirMarges={voirMarges} masquerClient />
       </tbody>
     </table>
   );
@@ -35,9 +37,9 @@ function rendre(voirMarges: boolean) {
 
 describe("missions table columns", () => {
   test("declares one header for each rendered mission cell (marges visibles)", () => {
-    const pagePath = fileURLToPath(new URL("./page.tsx", import.meta.url));
-    const pageSource = readFileSync(pagePath, "utf8");
-    const headerCount = pageSource.match(/<TableHead(?:\s|>)/g)?.length ?? 0;
+    const composantPath = fileURLToPath(new URL("./missions-par-client.tsx", import.meta.url));
+    const source = readFileSync(composantPath, "utf8");
+    const headerCount = source.match(/<TableHead(?:\s|>)/g)?.length ?? 0;
 
     const cellCount = rendre(true).match(/<td(?:\s|>)/g)?.length ?? 0;
 
