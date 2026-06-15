@@ -123,11 +123,8 @@ async function descripteurSuppression(
         avertissement: `La mission sera définitivement supprimée.${jours} Cette action est irréversible.`,
       };
     }
-    case "projet":
-      return {
-        avertissement:
-          "Le projet et toutes ses échéances (encaissements, décaissements, jalons) seront définitivement supprimés. Cette action est irréversible.",
-      };
+    // Un projet n'est PAS supprimable (engagement de delivery avec sa trésorerie) :
+    // on l'archive via « Terminer ». Seul son opportunité d'origine est supprimable.
     default:
       return undefined;
   }
@@ -597,10 +594,8 @@ export async function supprimerEntite(
       // Les affectations rattachées partent en cascade.
       await db.delete(missions).where(eq(missions.id, ref.id));
       break;
-    case "projet":
-      // Jalons, encaissements et décaissements partent en cascade.
-      await db.delete(projets).where(eq(projets.id, ref.id));
-      break;
+    // Le projet n'est volontairement pas supprimable (cf. descripteurSuppression) :
+    // il tombe dans le `default` ci-dessous.
     default:
       return { ok: false, message: "Cette entité ne peut pas être supprimée." };
   }
