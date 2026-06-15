@@ -3,6 +3,7 @@ import {
   peutGererUtilisateurs,
   peutVoirMarges,
   peutEditerDelivery,
+  peutSupprimerEntites,
   peutAccederRoute,
   labelRole,
 } from "./permissions";
@@ -29,6 +30,13 @@ describe("capacités par rôle", () => {
     expect(peutEditerDelivery(r("user"))).toBe(true);
     expect(peutEditerDelivery(r("commercial"))).toBe(false);
   });
+
+  it("supprimer définitivement une entité : admin seul", () => {
+    expect(peutSupprimerEntites(r("admin"))).toBe(true);
+    expect(peutSupprimerEntites(r("user"))).toBe(false);
+    expect(peutSupprimerEntites(r("commercial"))).toBe(false);
+    expect(peutSupprimerEntites(null)).toBe(false);
+  });
 });
 
 describe("accès aux routes", () => {
@@ -40,16 +48,18 @@ describe("accès aux routes", () => {
     }
   });
 
-  it("le commercial est restreint à ses pages", () => {
+  it("le commercial accède à ses pages et aux pages delivery (marges masquées)", () => {
     const c = r("commercial");
     expect(peutAccederRoute(c, "/clients")).toBe(true);
     expect(peutAccederRoute(c, "/clients/123")).toBe(true); // sous-route éventuelle
     expect(peutAccederRoute(c, "/parametres")).toBe(true);
-    // Pages exposant des marges / du delivery : interdites.
+    expect(peutAccederRoute(c, "/opportunites")).toBe(true); // pipeline commercial
+    // Pages delivery : ouvertes (les marges y sont masquées côté affichage/requête).
+    expect(peutAccederRoute(c, "/missions")).toBe(true);
+    expect(peutAccederRoute(c, "/projets")).toBe(true);
+    expect(peutAccederRoute(c, "/freelances")).toBe(true);
+    // Pages intrinsèquement financières : toujours interdites.
     expect(peutAccederRoute(c, "/")).toBe(false);
-    expect(peutAccederRoute(c, "/missions")).toBe(false);
-    expect(peutAccederRoute(c, "/projets")).toBe(false);
-    expect(peutAccederRoute(c, "/freelances")).toBe(false);
     expect(peutAccederRoute(c, "/statistiques")).toBe(false);
     expect(peutAccederRoute(c, "/users")).toBe(false);
   });

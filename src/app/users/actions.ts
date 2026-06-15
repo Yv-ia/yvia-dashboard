@@ -38,6 +38,33 @@ export async function supprimerUtilisateur(formData: FormData): Promise<Resultat
   return { ok: true };
 }
 
+export async function modifierRoleUtilisateur(formData: FormData): Promise<Resultat> {
+  const autorisation = await verifierAdmin();
+  if (!autorisation.ok) return autorisation;
+
+  const id = Number(formData.get("id"));
+  const roleDemande = String(formData.get("role") ?? "");
+
+  if (!id) return { ok: false, message: "Utilisateur introuvable." };
+  if (id === autorisation.userId) {
+    return { ok: false, message: "Vous ne pouvez pas modifier votre propre rôle." };
+  }
+  if (!estRoleValide(roleDemande)) {
+    return { ok: false, message: "Rôle invalide." };
+  }
+
+  const [utilisateur] = await db
+    .update(users)
+    .set({ role: roleDemande })
+    .where(eq(users.id, id))
+    .returning({ id: users.id });
+
+  if (!utilisateur) return { ok: false, message: "Utilisateur introuvable." };
+
+  revalidatePath("/users");
+  return { ok: true };
+}
+
 export async function creerInvitation(formData: FormData): Promise<ResultatInvitation> {
   const autorisation = await verifierAdmin();
   if (!autorisation.ok) return autorisation;

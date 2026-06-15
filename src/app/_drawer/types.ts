@@ -32,6 +32,13 @@ export type ChampEditable = {
   options?: OptionChamp[];
 };
 
+// Suppression définitive proposée dans le drawer (admin uniquement). Présente
+// seulement quand l'utilisateur a le droit ET que l'entité est supprimable ;
+// `avertissement` décrit la cascade éventuelle (jours de planning, échéances…).
+export type SuppressionEntite = {
+  avertissement: string;
+};
+
 export type DetailEntite = {
   ref: EntiteRef;
   titre: string;
@@ -41,6 +48,7 @@ export type DetailEntite = {
   infos: Info[]; // indicateurs en lecture seule
   sections: SectionLiens[];
   actionLabel: string; // libellé du bouton d'(in)activation, ex. "Archiver" / "Désactiver"
+  suppression?: SuppressionEntite; // bouton « Supprimer définitivement » (admin)
 };
 
 export const LIBELLE_TYPE: Record<TypeEntite, string> = {

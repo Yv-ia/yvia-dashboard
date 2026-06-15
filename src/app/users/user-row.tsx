@@ -2,8 +2,8 @@
 
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useDrawer } from "@/app/_drawer/drawer-stack";
-import { labelRole } from "@/lib/auth/permissions";
 import { DeleteUserForm } from "./delete-user-form";
+import { UserRoleSelect } from "./user-role-select";
 import type { Resultat } from "./actions";
 
 type Utilisateur = {
@@ -18,10 +18,12 @@ export function UserRow({
   utilisateur,
   estUtilisateurCourant,
   supprimer,
+  modifierRole,
 }: {
   utilisateur: Utilisateur;
   estUtilisateurCourant: boolean;
   supprimer: (formData: FormData) => Promise<Resultat>;
+  modifierRole: (formData: FormData) => Promise<Resultat>;
 }) {
   const { ouvrir } = useDrawer();
   const nomComplet = [utilisateur.prenom, utilisateur.nom].filter(Boolean).join(" ");
@@ -32,7 +34,15 @@ export function UserRow({
         {nomComplet || utilisateur.nom || utilisateur.email}
       </TableCell>
       <TableCell className="text-muted-foreground">{utilisateur.email}</TableCell>
-      <TableCell>{labelRole(utilisateur.role)}</TableCell>
+      <TableCell onClick={(event) => event.stopPropagation()}>
+        <UserRoleSelect
+          key={utilisateur.role}
+          id={utilisateur.id}
+          role={utilisateur.role}
+          disabled={estUtilisateurCourant}
+          action={modifierRole}
+        />
+      </TableCell>
       <TableCell onClick={(event) => event.stopPropagation()}>
         <div className="flex justify-end">
           <DeleteUserForm

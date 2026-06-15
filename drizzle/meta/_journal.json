@@ -33,8 +33,22 @@
     {
       "idx": 4,
       "version": "7",
-      "when": 1781469539944,
-      "tag": "0004_taches",
+      "when": 1781479814738,
+      "tag": "0004_opportunites",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781480028208,
+      "tag": "0005_recurrents",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781510441283,
+      "tag": "0006_taches",
       "breakpoints": true
     }
   ]
