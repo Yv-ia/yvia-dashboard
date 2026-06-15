@@ -50,6 +50,13 @@
       "when": 1781483385243,
       "tag": "0006_fige_projet_gagne",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781515676973,
+      "tag": "0007_backfill_projets_forfait_gagnes",
+      "breakpoints": true
     }
   ]
 }

@@ -12,7 +12,7 @@ import { formatEuro } from "@/lib/format";
 import { EntityLink } from "@/app/_drawer/drawer-stack";
 import { Button } from "@/components/ui/button";
 import { grouperParStatut } from "@/lib/opportunites/kanban";
-import { labelTypeOpportunite } from "@/lib/opportunites/type";
+import { labelTypeOpportunite, normaliserTypeOpportunite } from "@/lib/opportunites/type";
 import { STATUT_COMMERCIAL_BADGE_CLASSES } from "@/lib/projets/statut-commercial";
 import { OpportuniteFormDialog } from "./opportunite-form-dialog";
 import {
@@ -33,6 +33,12 @@ export type OpportuniteKanban = {
   ordre: number;
   projetId: number | null;
 };
+
+// Un forfait est un montant fixe ; un récurrent (régie / MCO) est un montant par
+// mois. On suffixe « /mois » à l'affichage des montants récurrents.
+function suffixeMontant(type: string): string {
+  return normaliserTypeOpportunite(type) === "recurrent" ? " /mois" : "";
+}
 
 // Sous-total des montants estimés d'une colonne, ventilé par catégorie (type
 // d'opportunité : forfait / récurrent). Les montants nuls sont ignorés.
@@ -114,6 +120,7 @@ export function KanbanBoard({
                   <span>{labelTypeOpportunite(type)}</span>
                   <span className="tabular-nums font-medium text-foreground">
                     {formatEuro(montant)}
+                    {suffixeMontant(type)}
                   </span>
                 </div>
               ))}
@@ -163,6 +170,7 @@ export function KanbanBoard({
                   {opp.montantEstime ? (
                     <p className="mt-1 text-sm font-medium tabular-nums">
                       {formatEuro(Number(opp.montantEstime))}
+                      {suffixeMontant(opp.type)}
                     </p>
                   ) : null}
 
