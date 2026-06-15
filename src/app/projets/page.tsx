@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
 import { peutVoirMarges } from "@/lib/auth/permissions";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
@@ -74,7 +74,8 @@ export default async function PageProjets({
         statut: encaissements.statut,
         fiabilite: encaissements.fiabilite,
       })
-      .from(encaissements),
+      .from(encaissements)
+      .where(isNotNull(encaissements.projetId)), // exclut les encaissements directs (sans projet)
     voirMarges
       ? db
           .select({
@@ -112,6 +113,7 @@ export default async function PageProjets({
 
   const encParProjet = new Map<number, Evenement[]>();
   for (const e of encRows) {
+    if (e.projetId == null) continue; // encaissement direct : pas de projet
     const arr = encParProjet.get(e.projetId) ?? [];
     arr.push({ id: e.id, date: e.date, montant: e.montant, libelle: e.libelle, statut: e.statut, fiabilite: e.fiabilite });
     encParProjet.set(e.projetId, arr);

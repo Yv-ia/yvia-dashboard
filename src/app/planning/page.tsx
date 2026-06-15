@@ -133,7 +133,7 @@ export default async function PagePlanning({
     db
       .select({
         id: encaissements.id,
-        projetId: encaissements.projetId,
+        projetId: projets.id, // jointure innerJoin → toujours défini (≠ encaissement direct)
         date: encaissements.date,
         montant: encaissements.montant,
         libelle: encaissements.libelle,
