@@ -48,4 +48,31 @@ describe("ProjetRow", () => {
   ])("rend le statut %s avec un badge colore", (statut, classe) => {
     expect(rendreStatut(statut)).toContain(classe);
   });
+
+  test("masque les colonnes Décaissé et Marge quand voirMarges=false", () => {
+    const rendre = (voirMarges: boolean) =>
+      renderToStaticMarkup(
+        <table>
+          <tbody>
+            <ProjetRow
+              projet={{ ...projetBase, statutCommercial: "gagne" }}
+              encaissements={[
+                { id: 1, date: "2026-01-01", montant: "10000", libelle: null, statut: "encaisse", fiabilite: null },
+              ]}
+              decaissements={[
+                { id: 2, date: "2026-01-01", montant: "4000", libelle: null, statut: "decaisse", fiabilite: null, freelanceNom: "X" },
+              ]}
+              jalons={[]}
+              freelancesActifs={[]}
+              voirMarges={voirMarges}
+            />
+          </tbody>
+        </table>
+      );
+
+    const avec = rendre(true).match(/<td(?:\s|>)/g)?.length ?? 0;
+    const sans = rendre(false).match(/<td(?:\s|>)/g)?.length ?? 0;
+    // Deux colonnes en moins : Décaissé et Marge.
+    expect(sans).toBe(avec - 2);
+  });
 });

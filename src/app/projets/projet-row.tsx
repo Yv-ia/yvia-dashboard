@@ -51,12 +51,14 @@ export function ProjetRow({
   decaissements,
   jalons,
   freelancesActifs,
+  voirMarges = true,
 }: {
   projet: Projet;
   encaissements: Evenement[];
   decaissements: Decaissement[];
   jalons: Jalon[];
   freelancesActifs: { id: number; prenom: string; nom: string }[];
+  voirMarges?: boolean; // false (commercial) : colonnes Décaissé/Marge masquées
 }) {
   const [open, setOpen] = useState(false);
   const stop = (e: React.MouseEvent) => e.stopPropagation();
@@ -91,10 +93,14 @@ export function ProjetRow({
         </TableCell>
         <TableCell className="text-right">{formatEuro(Number(projet.budget))}</TableCell>
         <TableCell className="text-right">{formatEuro(totalEnc)}</TableCell>
-        <TableCell className="text-right">{formatEuro(totalDec)}</TableCell>
-        <TableCell className={`text-right ${marge < 0 ? "text-rose-600" : ""}`}>
-          {formatEuro(marge)}
-        </TableCell>
+        {voirMarges ? (
+          <TableCell className="text-right">{formatEuro(totalDec)}</TableCell>
+        ) : null}
+        {voirMarges ? (
+          <TableCell className={`text-right ${marge < 0 ? "text-rose-600" : ""}`}>
+            {formatEuro(marge)}
+          </TableCell>
+        ) : null}
         <TableCell className="text-right">{formatEuro(reste)}</TableCell>
       </TableRow>
 
@@ -106,6 +112,7 @@ export function ProjetRow({
         decaissements={decaissements}
         jalons={jalons}
         freelancesActifs={freelancesActifs}
+        voirMarges={voirMarges}
       />
     </>
   );

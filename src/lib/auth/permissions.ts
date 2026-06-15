@@ -17,6 +17,13 @@ export function peutGererUtilisateurs(session: AvecRole): boolean {
   return role(session) === "admin";
 }
 
+// Suppression DÉFINITIVE d'une entité métier (client, freelance, mission,
+// projet) : admin seul. L'archivage/désactivation, lui, reste ouvert à tous
+// (réversible). La suppression est irréversible : on la réserve à l'admin.
+export function peutSupprimerEntites(session: AvecRole): boolean {
+  return role(session) === "admin";
+}
+
 // Voir les coûts d'achat et les marges (TJM achat, décaissements, marge calculée).
 // Masqué au commercial : il pilote la vente, pas la rentabilité interne.
 export function peutVoirMarges(session: AvecRole): boolean {
@@ -30,13 +37,22 @@ export function peutEditerDelivery(session: AvecRole): boolean {
 }
 
 // --- Accès aux routes -------------------------------------------------------
-// Le commercial n'a accès qu'à un sous-ensemble de l'application. Tant que le
-// masquage fin des marges n'est pas généralisé aux pages delivery, on restreint
-// le commercial par liste blanche (sûr par construction).
+// Le commercial n'a accès qu'à un sous-ensemble de l'application, géré par liste
+// blanche. Les pages delivery (missions, projets, freelances) y sont ajoutées
+// maintenant que le masquage fin des marges y est généralisé : le commercial les
+// consulte sans voir les coûts/marges, et toute mutation lui reste refusée.
+// Restent fermés : / (dashboard) et /statistiques, intrinsèquement financiers.
 
 // Préfixes de routes accessibles au commercial (au-delà des pages publiques).
 // Le pipeline d'opportunités fait partie de son périmètre (aucune marge exposée).
-const ROUTES_COMMERCIAL = ["/clients", "/parametres", "/opportunites"];
+const ROUTES_COMMERCIAL = [
+  "/clients",
+  "/parametres",
+  "/opportunites",
+  "/missions",
+  "/projets",
+  "/freelances",
+];
 
 export function peutAccederRoute(session: AvecRole, pathname: string): boolean {
   if (role(session) !== "commercial") return true; // admin / user : tout

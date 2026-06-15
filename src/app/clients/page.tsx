@@ -26,10 +26,13 @@ import {
 import {
   Table,
   TableBody,
+  TableCell,
+  TableFooter,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatEuro } from "@/lib/format";
 import { ClientFormDialog } from "./client-form-dialog";
 import { ClientRow } from "./client-row";
 import { creerClient } from "./actions";
@@ -112,6 +115,18 @@ export default async function PageClients({
     debutMois,
     finMois,
   });
+
+  // Totaux de la liste affichée (ligne de pied de tableau).
+  const totaux = liste.reduce(
+    (acc, c) => {
+      const s = statsParClient.get(c.id) ?? statsVides;
+      acc.caTotal += s.caTotal;
+      acc.caMois += s.caMois;
+      acc.margeTotale += s.margeTotale;
+      return acc;
+    },
+    { caTotal: 0, caMois: 0, margeTotale: 0 }
+  );
 
   // Conserve les query params pertinents quand on change d'onglet/filtre.
   const lienFiltre = (params: { vue?: string; statut?: string }) => {
@@ -217,6 +232,22 @@ export default async function PageClients({
                   );
                 })}
               </TableBody>
+              {liste.length > 1 ? (
+                <TableFooter>
+                  <TableRow>
+                    <TableCell colSpan={2}>Total</TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.caTotal)}</TableCell>
+                    <TableCell className="text-right">{formatEuro(totaux.caMois)}</TableCell>
+                    {voirMarges ? (
+                      <TableCell
+                        className={`text-right ${totaux.margeTotale < 0 ? "text-rose-600" : ""}`}
+                      >
+                        {formatEuro(totaux.margeTotale)}
+                      </TableCell>
+                    ) : null}
+                  </TableRow>
+                </TableFooter>
+              ) : null}
             </Table>
           )}
         </CardContent>
