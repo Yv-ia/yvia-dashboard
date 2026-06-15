@@ -30,6 +30,7 @@ import {
 } from "./pilotage-calculs";
 import { classeMarge, couleurMarge } from "./montants";
 import { TableauPrevisionnel } from "./tableau-previsionnel";
+import { OngletsPilotage } from "./onglets-pilotage";
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
 const isoJour = (d: Date) => d.toISOString().slice(0, 10);
@@ -211,6 +212,8 @@ export default async function PageStatistiques() {
 
   return (
     <div className="space-y-6">
+      <OngletsPilotage actif="pilotage" />
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Indicateur titre="CA encaissé" valeur={formatEuro(totalRealise.ca)} />
         <Indicateur

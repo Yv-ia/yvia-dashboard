@@ -10,6 +10,7 @@ import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres
 import { formatEuro, formatMois } from "@/lib/format";
 import { NavigationMois } from "../navigation-mois";
 import { MissionFormDialog } from "./mission-form-dialog";
+import { HypotheseRegieDialog } from "./hypothese-regie-dialog";
 import { SaisirJoursDialog } from "./saisir-jours-dialog";
 import { RegieMensuelleBoard } from "./regie-mensuelle-board";
 import { agregerRegieMensuelle, type AffectationRegie } from "@/lib/missions/regie-mensuelle";
@@ -95,6 +96,10 @@ export default async function PageRegie({
               mois={mois}
               libelleMois={formatMois(annee, mois)}
               trigger={<Button variant="outline">Saisir des jours</Button>}
+            />
+            <HypotheseRegieDialog
+              clientsListe={clientsActifs}
+              trigger={<Button variant="outline">Hypothèse régie</Button>}
             />
             <MissionFormDialog
               action={creerMission}

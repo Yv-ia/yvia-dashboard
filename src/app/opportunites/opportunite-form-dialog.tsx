@@ -28,6 +28,7 @@ type Opportunite = {
   type: string;
   statut: string;
   montantEstime: string | null;
+  dateGagne: string | null;
 };
 
 export function OpportuniteFormDialog({
@@ -115,16 +116,31 @@ export function OpportuniteFormDialog({
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="montantEstime">Montant estimé (€ HT)</Label>
-            <Input
-              id="montantEstime"
-              name="montantEstime"
-              type="number"
-              min="0"
-              defaultValue={opportunite?.montantEstime ?? ""}
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="montantEstime">Montant estimé (€ HT)</Label>
+              <Input
+                id="montantEstime"
+                name="montantEstime"
+                type="number"
+                min="0"
+                defaultValue={opportunite?.montantEstime ?? ""}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dateGagne">Date de signature</Label>
+              <Input
+                id="dateGagne"
+                name="dateGagne"
+                type="date"
+                defaultValue={opportunite?.dateGagne ?? ""}
+              />
+            </div>
           </div>
+          <p className="text-xs text-muted-foreground">
+            La date de signature ne compte (booking du CA) que si l’opportunité est au statut
+            « Gagné » ; vide = aujourd’hui au passage en gagné.
+          </p>
 
           <DialogFooter className="sm:justify-between">
             {opportunite && supprimer ? (

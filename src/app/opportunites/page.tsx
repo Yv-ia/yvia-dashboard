@@ -23,6 +23,7 @@ export default async function PageOpportunites() {
         montantEstime: opportunites.montantEstime,
         ordre: opportunites.ordre,
         projetId: opportunites.projetId,
+        dateGagne: opportunites.dateGagne,
       })
       .from(opportunites)
       .innerJoin(clients, eq(opportunites.clientId, clients.id))

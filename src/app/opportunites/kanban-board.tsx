@@ -32,6 +32,7 @@ export type OpportuniteKanban = {
   montantEstime: string | null;
   ordre: number;
   projetId: number | null;
+  dateGagne: string | null;
 };
 
 // Un forfait est un montant fixe ; un récurrent (régie / MCO) est un montant par
