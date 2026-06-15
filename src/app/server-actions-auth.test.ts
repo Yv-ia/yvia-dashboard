@@ -52,6 +52,7 @@ const actionsFormData: Array<[string, (fd: FormData) => Promise<{ ok: boolean; m
   ["missions.creerMission", missions.creerMission],
   ["missions.modifierMission", missions.modifierMission],
   ["missions.basculerActifMission", missions.basculerActifMission],
+  ["missions.genererJoursRegie", missions.genererJoursRegie],
   ["projets.creerProjet", projets.creerProjet],
   ["projets.modifierProjet", projets.modifierProjet],
   ["projets.basculerActifProjet", projets.basculerActifProjet],
