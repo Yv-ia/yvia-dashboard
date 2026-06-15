@@ -10,34 +10,48 @@ vi.mock("@/app/_drawer/drawer-stack", () => ({
 
 import { MissionRow, type LigneMission } from "./mission-row";
 
+const mission: LigneMission = {
+  id: 1,
+  nom: "Delta Jules Perso",
+  freelanceId: 1,
+  clientId: 1,
+  freelancePrenom: "Jules",
+  freelanceNom: "Bertrand",
+  clientNom: "DeltaRM",
+  tjmAchat: "600",
+  tjmVente: "500",
+  actif: true,
+};
+
+function rendre(voirMarges: boolean) {
+  return renderToStaticMarkup(
+    <table>
+      <tbody>
+        <MissionRow l={mission} voirMarges={voirMarges} />
+      </tbody>
+    </table>
+  );
+}
+
 describe("missions table columns", () => {
-  test("declares one header for each rendered mission cell", () => {
+  test("declares one header for each rendered mission cell (marges visibles)", () => {
     const pagePath = fileURLToPath(new URL("./page.tsx", import.meta.url));
     const pageSource = readFileSync(pagePath, "utf8");
     const headerCount = pageSource.match(/<TableHead(?:\s|>)/g)?.length ?? 0;
 
-    const mission: LigneMission = {
-      id: 1,
-      nom: "Delta Jules Perso",
-      freelanceId: 1,
-      clientId: 1,
-      freelancePrenom: "Jules",
-      freelanceNom: "Bertrand",
-      clientNom: "DeltaRM",
-      tjmAchat: "600",
-      tjmVente: "600",
-      actif: true,
-    };
-
-    const rowHtml = renderToStaticMarkup(
-      <table>
-        <tbody>
-          <MissionRow l={mission} />
-        </tbody>
-      </table>
-    );
-    const cellCount = rowHtml.match(/<td(?:\s|>)/g)?.length ?? 0;
+    const cellCount = rendre(true).match(/<td(?:\s|>)/g)?.length ?? 0;
 
     expect(headerCount).toBe(cellCount);
+  });
+
+  test("masque TJM achat et marge quand l'utilisateur ne peut pas voir les marges", () => {
+    const avec = rendre(true).match(/<td(?:\s|>)/g)?.length ?? 0;
+    const sans = rendre(false).match(/<td(?:\s|>)/g)?.length ?? 0;
+
+    // Deux colonnes en moins : TJM achat et Marge / jour.
+    expect(sans).toBe(avec - 2);
+    // TJM vente (500) reste, mais la marge (vente − achat = -100) n'apparaît pas.
+    expect(rendre(false)).toContain("500");
+    expect(rendre(false)).not.toContain("100");
   });
 });

@@ -14,12 +14,12 @@ export type LigneMission = {
   freelancePrenom: string;
   freelanceNom: string;
   clientNom: string;
-  tjmAchat: string;
+  tjmAchat?: string; // absent quand l'utilisateur ne peut pas voir les marges
   tjmVente: string;
   actif: boolean;
 };
 
-export function MissionRow({ l }: { l: LigneMission }) {
+export function MissionRow({ l, voirMarges }: { l: LigneMission; voirMarges: boolean }) {
   const { ouvrir } = useDrawer();
   const stop = (e: React.MouseEvent) => e.stopPropagation();
 
@@ -39,11 +39,15 @@ export function MissionRow({ l }: { l: LigneMission }) {
           {l.clientNom}
         </EntityLink>
       </TableCell>
-      <TableCell className="text-right">{formatEuro(Number(l.tjmAchat))}</TableCell>
+      {voirMarges ? (
+        <TableCell className="text-right">{formatEuro(Number(l.tjmAchat))}</TableCell>
+      ) : null}
       <TableCell className="text-right">{formatEuro(Number(l.tjmVente))}</TableCell>
-      <TableCell className="text-right">
-        {formatEuro(Number(l.tjmVente) - Number(l.tjmAchat))}
-      </TableCell>
+      {voirMarges ? (
+        <TableCell className="text-right">
+          {formatEuro(Number(l.tjmVente) - Number(l.tjmAchat))}
+        </TableCell>
+      ) : null}
       <TableCell>{l.actif ? "Actif" : "Inactif"}</TableCell>
     </TableRow>
   );

@@ -14,7 +14,7 @@ import { basculerAfficherPlanning } from "./actions";
 type FreelanceRowProps = {
   id: number;
   nom: string;
-  gain: number;
+  gain?: number; // absent = colonne « Gain rapporté » masquée (marge cachée au commercial)
   afficherPlanning?: boolean; // absent = pas de colonne Planning (vue Archives)
 };
 
@@ -34,7 +34,9 @@ export function FreelanceRowView({
   return (
     <TableRow onClick={() => onOpen({ type: "freelance", id })} className="cursor-pointer">
       <TableCell className="font-medium">{nom}</TableCell>
-      <TableCell className="text-right">{formatEuro(gain)}</TableCell>
+      {gain !== undefined ? (
+        <TableCell className="text-right">{formatEuro(gain)}</TableCell>
+      ) : null}
       {afficherPlanning !== undefined ? (
         // stopPropagation : basculer l'interrupteur ne doit pas ouvrir le drawer.
         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
+import { peutVoirMarges } from "@/lib/auth/permissions";
 import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
 import { and, eq, ne, or } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
@@ -36,12 +37,15 @@ export default async function PageProjets({
 }: {
   searchParams: Promise<{ vue?: string }>;
 }) {
-  await exigerSession();
+  const session = await exigerSession();
+  const voirMarges = peutVoirMarges(session);
   const { vue } = await searchParams;
   const termines = vue === "termines" || vue === "archives";
 
   // On récupère TOUT l'échéancier (prévu + réalisé) : le dialogue "Gérer" en a besoin.
   // Les colonnes du tableau, elles, ne compteront que le réalisé (filtré plus bas).
+  // Les décaissements (coûts) ne sont ni lus ni transmis si l'utilisateur ne peut
+  // pas voir les marges (commercial) : la marge n'existe alors pas côté navigateur.
   const [liste, encRows, decRows, jalRows, clientsListe, freelancesActifs] = await Promise.all([
     db
       .select({
@@ -74,19 +78,21 @@ export default async function PageProjets({
         fiabilite: encaissements.fiabilite,
       })
       .from(encaissements),
-    db
-      .select({
-        id: decaissements.id,
-        projetId: decaissements.projetId,
-        date: decaissements.date,
-        montant: decaissements.montant,
-        libelle: decaissements.libelle,
-        statut: decaissements.statut,
-        prenom: freelances.prenom,
-        nom: freelances.nom,
-      })
-      .from(decaissements)
-      .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id)),
+    voirMarges
+      ? db
+          .select({
+            id: decaissements.id,
+            projetId: decaissements.projetId,
+            date: decaissements.date,
+            montant: decaissements.montant,
+            libelle: decaissements.libelle,
+            statut: decaissements.statut,
+            prenom: freelances.prenom,
+            nom: freelances.nom,
+          })
+          .from(decaissements)
+          .innerJoin(freelances, eq(decaissements.freelanceId, freelances.id))
+      : Promise.resolve([]),
     db
       .select({
         id: jalons.id,
@@ -205,8 +211,8 @@ export default async function PageProjets({
                   <TableHead>Statut</TableHead>
                   <TableHead className="text-right">Budget</TableHead>
                   <TableHead className="text-right">Encaissé</TableHead>
-                  <TableHead className="text-right">Décaissé</TableHead>
-                  <TableHead className="text-right">Marge</TableHead>
+                  {voirMarges ? <TableHead className="text-right">Décaissé</TableHead> : null}
+                  {voirMarges ? <TableHead className="text-right">Marge</TableHead> : null}
                   <TableHead className="text-right">Reste à facturer</TableHead>
                 </TableRow>
               </TableHeader>
@@ -229,6 +235,7 @@ export default async function PageProjets({
                     decaissements={decParProjet.get(p.id) ?? []}
                     jalons={jalParProjet.get(p.id) ?? []}
                     freelancesActifs={freelancesActifs}
+                    voirMarges={voirMarges}
                   />
                 ))}
               </TableBody>
