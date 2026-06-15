@@ -185,11 +185,12 @@ export async function genererJoursRegie(formData: FormData): Promise<Resultat> {
   return { ok: true };
 }
 
-// Report du mois précédent : reprend les régies facturées le mois dernier et pose
-// le même nombre de jours sur le mois cible (mêmes freelances, TJM figés depuis la
-// mission). On ne touche qu'aux régies SANS jours sur le mois cible (idempotent :
-// relancer ne double pas). Les jours déjà occupés par le freelance sont sautés.
-export async function reporterMoisPrecedent(formData: FormData): Promise<Resultat> {
+// Duplication du mois précédent, par sélection : pour chaque régie choisie
+// (client → freelances cochés + nombre de jours), on (re)pose les jours sur le
+// mois cible. ÉCRASE la prévision existante de ces régies sur le mois (delete puis
+// pose), pour transformer le potentiel suivi en réel. Les jours déjà occupés par
+// le freelance sur une AUTRE régie sont sautés (1 régie/jour).
+export async function dupliquerMoisPrecedent(formData: FormData): Promise<Resultat> {
   const session = await verifierConnecte();
   if (!session.ok) return session;
 
@@ -197,48 +198,21 @@ export async function reporterMoisPrecedent(formData: FormData): Promise<Resulta
   const moisNum = Number(formData.get("mois"));
   if (!annee || moisNum < 1 || moisNum > 12) return { ok: false, message: "Mois invalide." };
 
-  const prevAnnee = moisNum === 1 ? annee - 1 : annee;
-  const prevMois = moisNum === 1 ? 12 : moisNum - 1;
-  const debutPrev = premierJourDuMois(prevAnnee, prevMois);
-  const finPrev = dernierJourDuMois(prevAnnee, prevMois);
+  let selection: { missionId: number; nbJours: number }[];
+  try {
+    selection = JSON.parse(String(formData.get("selection") ?? "[]"));
+  } catch {
+    return { ok: false, message: "Sélection invalide." };
+  }
+  selection = selection.filter(
+    (s) => Number(s.missionId) > 0 && Number.isFinite(s.nbJours) && s.nbJours > 0
+  );
+  if (selection.length === 0) return { ok: false, message: "Sélectionnez au moins une régie." };
+
   const debutCur = premierJourDuMois(annee, moisNum);
   const finCur = dernierJourDuMois(annee, moisNum);
   const joursOuvresCur = listeJoursOuvresDuMois(annee, moisNum);
-
-  // Jours facturés le mois précédent, par régie (compte des jours distincts).
-  const prevAffs = await db
-    .select({ missionId: affectations.missionId, date: affectations.date })
-    .from(affectations)
-    .innerJoin(missions, eq(affectations.missionId, missions.id))
-    .where(and(eq(missions.actif, true), gte(affectations.date, debutPrev), lte(affectations.date, finPrev)));
-
-  const joursParMission = new Map<number, Set<string>>();
-  for (const a of prevAffs) {
-    (joursParMission.get(a.missionId) ?? joursParMission.set(a.missionId, new Set()).get(a.missionId)!).add(a.date);
-  }
-  if (joursParMission.size === 0) {
-    return { ok: false, message: "Aucune régie facturée le mois précédent." };
-  }
-
-  // État du mois cible : régies déjà posées + jours occupés par freelance.
-  const curAffs = await db
-    .select({
-      missionId: affectations.missionId,
-      freelanceId: affectations.freelanceId,
-      date: affectations.date,
-    })
-    .from(affectations)
-    .where(and(gte(affectations.date, debutCur), lte(affectations.date, finCur)));
-  const dejaPosees = new Set(curAffs.map((a) => a.missionId));
-  const occupeParFreelance = new Map<number, Set<string>>();
-  for (const a of curAffs) {
-    (occupeParFreelance.get(a.freelanceId) ?? occupeParFreelance.set(a.freelanceId, new Set()).get(a.freelanceId)!).add(a.date);
-  }
-
-  const aReporter = [...joursParMission.keys()].filter((id) => !dejaPosees.has(id));
-  if (aReporter.length === 0) {
-    return { ok: false, message: "Toutes les régies du mois précédent sont déjà posées ce mois-ci." };
-  }
+  const missionIds = selection.map((s) => s.missionId);
 
   const ms = await db
     .select({
@@ -248,20 +222,46 @@ export async function reporterMoisPrecedent(formData: FormData): Promise<Resulta
       tjmVente: missions.tjmVente,
     })
     .from(missions)
-    .where(inArray(missions.id, aReporter));
+    .where(inArray(missions.id, missionIds));
+  const parId = new Map(ms.map((m) => [m.id, m]));
 
-  const aInserer: (typeof affectations.$inferInsert)[] = [];
-  for (const m of ms) {
-    const nbJours = joursParMission.get(m.id)?.size ?? 0;
-    const pris = occupeParFreelance.get(m.freelanceId) ?? new Set<string>();
-    const cibles = joursOuvresCur.filter((d) => !pris.has(d)).slice(0, nbJours);
-    for (const date of cibles) {
-      aInserer.push({ missionId: m.id, freelanceId: m.freelanceId, date, tjmAchat: m.tjmAchat, tjmVente: m.tjmVente });
-      pris.add(date);
+  await db.transaction(async (tx) => {
+    // Écrase la prévision existante : on retire les jours des régies sélectionnées
+    // sur le mois cible avant de (re)poser.
+    await tx
+      .delete(affectations)
+      .where(
+        and(
+          inArray(affectations.missionId, missionIds),
+          gte(affectations.date, debutCur),
+          lte(affectations.date, finCur)
+        )
+      );
+
+    // Jours du mois déjà occupés par chaque freelance (sur les régies non écrasées).
+    const restantes = await tx
+      .select({ freelanceId: affectations.freelanceId, date: affectations.date })
+      .from(affectations)
+      .where(and(gte(affectations.date, debutCur), lte(affectations.date, finCur)));
+    const occupe = new Map<number, Set<string>>();
+    for (const a of restantes) {
+      (occupe.get(a.freelanceId) ?? occupe.set(a.freelanceId, new Set()).get(a.freelanceId)!).add(a.date);
     }
-    occupeParFreelance.set(m.freelanceId, pris);
-  }
-  if (aInserer.length > 0) await db.insert(affectations).values(aInserer);
+
+    const aInserer: (typeof affectations.$inferInsert)[] = [];
+    for (const s of selection) {
+      const m = parId.get(s.missionId);
+      if (!m) continue;
+      const pris = occupe.get(m.freelanceId) ?? new Set<string>();
+      const cibles = joursOuvresCur.filter((d) => !pris.has(d)).slice(0, s.nbJours);
+      for (const date of cibles) {
+        aInserer.push({ missionId: m.id, freelanceId: m.freelanceId, date, tjmAchat: m.tjmAchat, tjmVente: m.tjmVente });
+        pris.add(date);
+      }
+      occupe.set(m.freelanceId, pris);
+    }
+    if (aInserer.length > 0) await tx.insert(affectations).values(aInserer);
+  });
 
   revalidatePath("/missions");
   revalidatePath("/");
