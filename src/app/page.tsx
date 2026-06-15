@@ -8,15 +8,12 @@ import {
   encaissements,
   decaissements,
   recurrents,
+  opportunites,
 } from "@/db/schema";
 import { and, eq, gte, lte, ne } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
-import {
-  projeterRecurrent,
-  totaliserProjection,
-  type PlanningMensuel,
-} from "@/lib/recurrents/previsionnel";
+import { calculerPrevisionnel12Mois } from "./statistiques/previsionnel-calculs";
 import { formatEuro, formatPourcent, formatDate } from "@/lib/format";
 import { NavigationMois } from "./navigation-mois";
 import { EntityLink } from "./_drawer/drawer-stack";
@@ -41,8 +38,17 @@ export default async function PageDashboard({
   const debutAnnee = `${annee}-01-01`;
   const finAnnee = `${annee}-12-31`;
 
-  // Données du mois affiché + agrégats annuels (CA prévisionnel par source).
-  const [affs, encMois, decMois, encPrevus, decPrevus, affsAnnee, encAnnee, recurrentsAnnee] =
+  // Sélection commune aux récurrents (régie macro + RUN/licence).
+  const champsRecurrent = {
+    categorie: recurrents.categorie,
+    montantRecurrent: recurrents.montantRecurrent,
+    coutRecurrent: recurrents.coutRecurrent,
+    dateDebut: recurrents.dateDebut,
+    dateFin: recurrents.dateFin,
+  };
+
+  // Données du mois affiché + sources annuelles du prévisionnel (CA par source).
+  const [affs, encMois, decMois, encPrevus, decPrevus, affsAnnee, forfaitsGagnes, recsRegie, recsNonRegie] =
     await Promise.all([
     // Régie du mois : chaque jour affecté porte son propre TJM (figé à la pose).
     // On somme les TJM pour les KPI du mois.
@@ -126,68 +132,59 @@ export default async function PageDashboard({
         )
       )
       .orderBy(decaissements.date),
-    // --- Agrégats annuels (CA prévisionnel par source) ---
-    // Régie : Σ TJM vente des affectations de l'année.
+    // --- Sources annuelles du prévisionnel (mêmes requêtes que /statistiques/previsionnel) ---
+    // Régie réel : tous les jours posés de l'année (date + TJM vente).
     db
-      .select({ tjmVente: affectations.tjmVente })
+      .select({ date: affectations.date, tjmVente: affectations.tjmVente })
       .from(affectations)
       .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
-    // Forfait : Σ encaissements de l'année (réalisés + prévus = prévisionnel plein).
+    // Forfait : booking des deals forfait GAGNÉS, par mois de signature (date_gagne).
     db
-      .select({ montant: encaissements.montant })
-      .from(encaissements)
-      .innerJoin(projets, eq(encaissements.projetId, projets.id))
+      .select({ dateGagne: opportunites.dateGagne, montant: opportunites.montantEstime })
+      .from(opportunites)
       .where(
         and(
-          eq(projets.actif, true),
-          ne(projets.statutCommercial, "perdu"),
-          gte(encaissements.date, debutAnnee),
-          lte(encaissements.date, finAnnee)
+          eq(opportunites.type, "forfait"),
+          eq(opportunites.statut, "gagne"),
+          gte(opportunites.dateGagne, debutAnnee),
+          lte(opportunites.dateGagne, finAnnee)
         )
       ),
-    // Maintenance MCO : récurrents RUN / licence (la régie est déjà comptée via les
-    // affectations ci-dessus → on exclut la catégorie régie pour ne pas la doubler).
+    // Régie macro : hypothèses (récurrents catégorie régie) → relais des mois non planifiés.
     db
-      .select({
-        categorie: recurrents.categorie,
-        montantRecurrent: recurrents.montantRecurrent,
-        coutRecurrent: recurrents.coutRecurrent,
-        dateDebut: recurrents.dateDebut,
-        dateFin: recurrents.dateFin,
-      })
+      .select(champsRecurrent)
+      .from(recurrents)
+      .where(and(eq(recurrents.actif, true), eq(recurrents.categorie, "regie"))),
+    // Récurrence : contrats RUN / licence (la régie est portée par sa propre ligne).
+    db
+      .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
   ]);
 
   const arrondi = (n: number) => Math.round(n * 100) / 100;
 
-  // CA prévisionnel de l'année, ventilé par source. La régie vient du planning
-  // (affectations) ; le MCO RUN/licence est projeté sur les 12 mois (planning vide
-  // = estimation mensuelle, cf. projeterRecurrent).
-  const horizonAnnee = Array.from(
-    { length: 12 },
-    (_, i) => `${annee}-${String(i + 1).padStart(2, "0")}`
-  );
-  const planningVide: PlanningMensuel = new Map();
-  const caRegieAnnee = arrondi(affsAnnee.reduce((s, a) => s + Number(a.tjmVente), 0));
-  const caForfaitAnnee = arrondi(encAnnee.reduce((s, e) => s + Number(e.montant), 0));
-  const caMcoAnnee = arrondi(
-    recurrentsAnnee.reduce((s, r) => {
-      const points = projeterRecurrent(
-        {
-          categorie: r.categorie,
-          montantRecurrent: Number(r.montantRecurrent),
-          coutRecurrent: r.coutRecurrent == null ? null : Number(r.coutRecurrent),
-          dateDebut: r.dateDebut,
-          dateFin: r.dateFin,
-        },
-        planningVide,
-        horizonAnnee
-      );
-      return s + totaliserProjection(points).revenu;
-    }, 0)
-  );
-  const caAnnuelTotal = arrondi(caRegieAnnee + caForfaitAnnee + caMcoAnnee);
+  // CA prévisionnel de l'année, ventilé par source — calcul partagé avec la page
+  // /statistiques/previsionnel pour garantir des chiffres cohérents (régie = planning
+  // réel + hypothèse macro, forfait = booking des deals gagnés, récurrence = RUN/licence).
+  const versRecurrentPrevisionnel = (r: (typeof recsRegie)[number]) => ({
+    categorie: r.categorie,
+    montantRecurrent: Number(r.montantRecurrent),
+    coutRecurrent: r.coutRecurrent == null ? null : Number(r.coutRecurrent),
+    dateDebut: r.dateDebut,
+    dateFin: r.dateFin,
+  });
+  const { totaux: previsionnel } = calculerPrevisionnel12Mois({
+    annee,
+    affectations: affsAnnee,
+    recurrentsRegie: recsRegie.map(versRecurrentPrevisionnel),
+    recurrentsNonRegie: recsNonRegie.map(versRecurrentPrevisionnel),
+    forfaitsGagnes,
+  });
+  const caRegieAnnee = previsionnel.regie;
+  const caForfaitAnnee = previsionnel.forfait;
+  const caMcoAnnee = previsionnel.recurrence;
+  const caAnnuelTotal = previsionnel.total;
 
   // Totaux du mois = régie (jours posés × TJM) + forfait (encaissements / décaissements réalisés).
   const caForfait = encMois.reduce((s, e) => s + Number(e.montant), 0);
