@@ -48,16 +48,17 @@ describe("accès aux routes", () => {
     }
   });
 
-  it("le commercial est restreint à ses pages", () => {
+  it("le commercial accède à ses pages et aux pages delivery (marges masquées)", () => {
     const c = r("commercial");
     expect(peutAccederRoute(c, "/clients")).toBe(true);
     expect(peutAccederRoute(c, "/clients/123")).toBe(true); // sous-route éventuelle
     expect(peutAccederRoute(c, "/parametres")).toBe(true);
-    // Pages exposant des marges / du delivery : interdites.
+    // Pages delivery : ouvertes (les marges y sont masquées côté affichage/requête).
+    expect(peutAccederRoute(c, "/missions")).toBe(true);
+    expect(peutAccederRoute(c, "/projets")).toBe(true);
+    expect(peutAccederRoute(c, "/freelances")).toBe(true);
+    // Pages intrinsèquement financières : toujours interdites.
     expect(peutAccederRoute(c, "/")).toBe(false);
-    expect(peutAccederRoute(c, "/missions")).toBe(false);
-    expect(peutAccederRoute(c, "/projets")).toBe(false);
-    expect(peutAccederRoute(c, "/freelances")).toBe(false);
     expect(peutAccederRoute(c, "/statistiques")).toBe(false);
     expect(peutAccederRoute(c, "/users")).toBe(false);
   });
