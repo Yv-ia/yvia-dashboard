@@ -31,6 +31,7 @@ import * as clients from "./clients/actions";
 import * as freelances from "./freelances/actions";
 import * as missions from "./missions/actions";
 import * as projets from "./projets/actions";
+import * as opportunites from "./opportunites/actions";
 import * as planning from "./planning-actions";
 import * as users from "./users/actions";
 
@@ -64,6 +65,7 @@ const actionsFormData: Array<[string, (fd: FormData) => Promise<{ ok: boolean; m
   ["projets.definirFiabiliteProjet", projets.definirFiabiliteProjet],
   ["projets.ajouterJalon", projets.ajouterJalon],
   ["projets.supprimerJalon", projets.supprimerJalon],
+  ["opportunites.supprimerOpportunite", opportunites.supprimerOpportunite],
   ["users.supprimerUtilisateur", users.supprimerUtilisateur],
   ["users.modifierRoleUtilisateur", users.modifierRoleUtilisateur],
   ["users.creerInvitation", users.creerInvitation],

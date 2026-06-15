@@ -22,40 +22,14 @@ const projetBase = {
   actif: true,
 };
 
-function rendreStatut(statutCommercial: string) {
-  return renderToStaticMarkup(
-    <table>
-      <tbody>
-        <ProjetRow
-          projet={{ ...projetBase, statutCommercial }}
-          encaissements={[]}
-          decaissements={[]}
-          jalons={[]}
-          freelancesActifs={[]}
-        />
-      </tbody>
-    </table>
-  );
-}
-
 describe("ProjetRow", () => {
-  test.each([
-    ["a_qualifier", "bg-yvia-ice"],
-    ["en_discussion", "bg-amber-50"],
-    ["proposition_envoyee", "bg-sky-50"],
-    ["gagne", "bg-emerald-50"],
-    ["perdu", "bg-rose-50"],
-  ])("rend le statut %s avec un badge colore", (statut, classe) => {
-    expect(rendreStatut(statut)).toContain(classe);
-  });
-
   test("masque les colonnes Décaissé et Marge quand voirMarges=false", () => {
     const rendre = (voirMarges: boolean) =>
       renderToStaticMarkup(
         <table>
           <tbody>
             <ProjetRow
-              projet={{ ...projetBase, statutCommercial: "gagne" }}
+              projet={projetBase}
               encaissements={[
                 { id: 1, date: "2026-01-01", montant: "10000", libelle: null, statut: "encaisse", fiabilite: null },
               ]}

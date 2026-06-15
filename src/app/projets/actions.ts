@@ -7,7 +7,7 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { formatEuro } from "@/lib/format";
 import { estFiabilite, normaliserFiabiliteEcheance } from "@/lib/calculs/previsionnel";
-import { normaliserStatutCommercial } from "@/lib/projets/statut-commercial";
+import { STATUT_COMMERCIAL_EXISTANT } from "@/lib/projets/statut-commercial";
 import { exigerDelivery } from "@/lib/auth/garde";
 
 // Lit une catégorie de fiabilité depuis le formulaire : une vraie catégorie, ou null
@@ -40,7 +40,6 @@ export async function creerProjet(formData: FormData): Promise<Resultat> {
   const clientId = Number(formData.get("clientId"));
   const nom = String(formData.get("nom") ?? "").trim();
   const budget = String(formData.get("budget") ?? "").trim();
-  const statutCommercial = normaliserStatutCommercial(String(formData.get("statutCommercial") ?? ""));
 
   if (!clientId) return { ok: false, message: "Le client est obligatoire." };
   if (!nom) return { ok: false, message: "Le nom du projet est obligatoire." };
@@ -48,7 +47,8 @@ export async function creerProjet(formData: FormData): Promise<Resultat> {
     return { ok: false, message: "Le budget doit être supérieur à 0." };
   }
 
-  await db.insert(projets).values({ clientId, nom, budget, statutCommercial });
+  // Un projet = du delivery, donc toujours "gagne" (le pipeline vit dans `opportunites`).
+  await db.insert(projets).values({ clientId, nom, budget, statutCommercial: STATUT_COMMERCIAL_EXISTANT });
   rafraichir();
   return { ok: true };
 }
@@ -61,7 +61,6 @@ export async function modifierProjet(formData: FormData): Promise<Resultat> {
   const clientId = Number(formData.get("clientId"));
   const nom = String(formData.get("nom") ?? "").trim();
   const budget = String(formData.get("budget") ?? "").trim();
-  const statutCommercial = normaliserStatutCommercial(String(formData.get("statutCommercial") ?? ""));
 
   if (!id) return { ok: false, message: "Projet introuvable." };
   if (!clientId) return { ok: false, message: "Le client est obligatoire." };
@@ -81,7 +80,7 @@ export async function modifierProjet(formData: FormData): Promise<Resultat> {
 
   await db
     .update(projets)
-    .set({ clientId, nom, budget, statutCommercial })
+    .set({ clientId, nom, budget })
     .where(eq(projets.id, id));
   rafraichir();
   return { ok: true };

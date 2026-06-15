@@ -9,14 +9,11 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { ArchiveProjetButton } from "./archive-projet-button";
 import { ChampInline } from "@/app/_drawer/champ-inline";
 import { modifierChampEntite } from "@/app/_drawer/actions";
 import { formatEuro, formatDate } from "@/lib/format";
 import { pourcentFiabilite } from "@/lib/calculs/previsionnel";
-import { STATUTS_COMMERCIAUX } from "@/lib/projets/statut-commercial";
 import {
   fusionnerEvenements,
   type EvenementProjet,
@@ -77,7 +74,6 @@ export function ProjetDetailDialog({
     clientId: number;
     clientNom: string;
     budget: string;
-    statutCommercial: string;
     fiabiliteDefaut: string | null;
     clientFiabilite: string | null;
     actif: boolean;
@@ -148,15 +144,6 @@ export function ProjetDetailDialog({
             type="number"
             onSave={(v) => sauverChamp("budget", v)}
           />
-          <div className="space-y-1 sm:col-span-2">
-            <Label htmlFor={`projet-statut-${projet.id}`}>Statut commercial</Label>
-            <Select
-              id={`projet-statut-${projet.id}`}
-              defaultValue={projet.statutCommercial}
-              options={STATUTS_COMMERCIAUX.map((s) => ({ value: s.key, label: s.label }))}
-              onValueChange={(v) => void sauverChamp("statutCommercial", v)}
-            />
-          </div>
         </div>
 
         {/* Récap (réalisé, sauf "reste à planifier" qui tient compte du prévu).

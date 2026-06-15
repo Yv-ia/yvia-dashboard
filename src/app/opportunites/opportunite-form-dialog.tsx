@@ -3,6 +3,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -15,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { ConfirmDialog } from "@/components/confirm-dialog";
 import { STATUTS_COMMERCIAUX } from "@/lib/projets/statut-commercial";
 import { TYPES_OPPORTUNITE, TYPE_OPPORTUNITE_DEFAUT } from "@/lib/opportunites/type";
 import type { Resultat } from "./actions";
@@ -35,6 +37,7 @@ export function OpportuniteFormDialog({
   statutInitial,
   titre,
   trigger,
+  supprimer,
 }: {
   action: (formData: FormData) => Promise<Resultat>;
   opportunite?: Opportunite; // fourni = édition, sinon = création
@@ -42,6 +45,8 @@ export function OpportuniteFormDialog({
   statutInitial?: string; // statut pré-sélectionné à la création
   titre: string;
   trigger: React.ReactElement;
+  // Fourni (et en édition) = affiche un bouton « Supprimer » dans le pied de page.
+  supprimer?: (formData: FormData) => Promise<Resultat>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -121,7 +126,38 @@ export function OpportuniteFormDialog({
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="sm:justify-between">
+            {opportunite && supprimer ? (
+              <ConfirmDialog
+                trigger={
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="size-4" />
+                    Supprimer
+                  </Button>
+                }
+                titre="Supprimer l'opportunité ?"
+                description="L'opportunité sera définitivement retirée du pipeline. Cette action est irréversible."
+                confirmLabel="Supprimer"
+                destructif
+                onConfirm={async () => {
+                  const fd = new FormData();
+                  fd.set("id", String(opportunite.id));
+                  const res = await supprimer(fd);
+                  if (res.ok) {
+                    toast.success("Opportunité supprimée.");
+                    setOpen(false);
+                  } else {
+                    toast.error(res.message ?? "Suppression impossible.");
+                  }
+                }}
+              />
+            ) : (
+              <span />
+            )}
             <Button type="submit">Enregistrer</Button>
           </DialogFooter>
         </form>

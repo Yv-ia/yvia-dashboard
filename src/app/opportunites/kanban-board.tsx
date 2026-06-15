@@ -15,7 +15,12 @@ import { grouperParStatut } from "@/lib/opportunites/kanban";
 import { labelTypeOpportunite } from "@/lib/opportunites/type";
 import { STATUT_COMMERCIAL_BADGE_CLASSES } from "@/lib/projets/statut-commercial";
 import { OpportuniteFormDialog } from "./opportunite-form-dialog";
-import { definirStatutOpportunite, convertirOpportunite, modifierOpportunite } from "./actions";
+import {
+  definirStatutOpportunite,
+  convertirOpportunite,
+  modifierOpportunite,
+  supprimerOpportunite,
+} from "./actions";
 
 export type OpportuniteKanban = {
   id: number;
@@ -101,6 +106,7 @@ export function KanbanBoard({
                   <div className="flex items-start justify-between gap-2">
                     <OpportuniteFormDialog
                       action={modifierOpportunite}
+                      supprimer={supprimerOpportunite}
                       opportunite={opp}
                       clientsListe={clientsListe}
                       titre="Modifier l'opportunité"

@@ -66,6 +66,23 @@ export async function modifierOpportunite(formData: FormData): Promise<Resultat>
   return { ok: true };
 }
 
+// Suppression définitive d'une opportunité (carte du pipeline). Ouverte à tout
+// utilisateur connecté, comme les autres mutations d'opportunité : le pipeline est
+// le périmètre du commercial, et une opportunité est un élément jetable (contrairement
+// à un projet, qui n'est pas supprimable). Si l'opportunité a été convertie, le projet
+// ou le récurrent lié n'est PAS touché (la FK pointe vers eux, sans cascade inverse).
+export async function supprimerOpportunite(formData: FormData): Promise<Resultat> {
+  const garde = await exigerConnecte();
+  if (!garde.ok) return garde;
+
+  const id = Number(formData.get("id"));
+  if (!id) return { ok: false, message: "Opportunité introuvable." };
+
+  await db.delete(opportunites).where(eq(opportunites.id, id));
+  revalidatePath("/opportunites");
+  return { ok: true };
+}
+
 // Déplacement Kanban : change le statut (et la position dans la colonne).
 export async function definirStatutOpportunite(formData: FormData): Promise<Resultat> {
   const garde = await exigerConnecte();

@@ -125,9 +125,11 @@ export const projets = pgTable("projets", {
   actif: boolean("actif").notNull().default(true), // true = actif, false = terminé
   // Surcharge de fiabilité au niveau projet. Vide = hérite du client (cf. cascade prévisionnel).
   fiabiliteDefaut: text("fiabilite_defaut"),
-  // Suivi CRM simple du sujet commercial.
-  // Les projets existants en production seront migrés en "gagne".
-  statutCommercial: text("statut_commercial").notNull().default("a_qualifier"),
+  // Le pipeline commercial (prospection → gagné/perdu) vit désormais dans la table
+  // `opportunites` (Kanban). Un projet représente uniquement du delivery : il est
+  // donc toujours "gagne". Colonne conservée le temps de la transition (cf. lot
+  // ultérieur : à SUPPRIMER une fois les vues 100 % migrées vers `opportunites`).
+  statutCommercial: text("statut_commercial").notNull().default("gagne"),
 });
 
 // --- JALONS (forfait) : repères datés d'un projet, SANS impact financier ---
