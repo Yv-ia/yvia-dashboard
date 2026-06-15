@@ -3,7 +3,12 @@ ALTER TABLE "projets" ALTER COLUMN "statut_commercial" SET DEFAULT 'gagne';--> s
 -- disparaître — les projets non gagnés ET leurs échéances/jalons emportés par la
 -- cascade — dans des tables `_backup_0006_*`. Ces tables sont inconnues de l'ORM
 -- (aucun impact applicatif) et restent récupérables en SQL ; À DROPPER MANUELLEMENT
--- une fois la migration validée en production.
+-- une fois la migration validée en production. Les DROP IF EXISTS rendent l'étape
+-- rejouable (relance manuelle après un échec partiel sans repartir d'une base vierge).
+DROP TABLE IF EXISTS "_backup_0006_jalons";--> statement-breakpoint
+DROP TABLE IF EXISTS "_backup_0006_decaissements";--> statement-breakpoint
+DROP TABLE IF EXISTS "_backup_0006_encaissements";--> statement-breakpoint
+DROP TABLE IF EXISTS "_backup_0006_projets";--> statement-breakpoint
 CREATE TABLE "_backup_0006_projets" AS SELECT * FROM "projets" WHERE "statut_commercial" <> 'gagne';--> statement-breakpoint
 CREATE TABLE "_backup_0006_encaissements" AS SELECT "e".* FROM "encaissements" "e" JOIN "_backup_0006_projets" "p" ON "e"."projet_id" = "p"."id";--> statement-breakpoint
 CREATE TABLE "_backup_0006_decaissements" AS SELECT "d".* FROM "decaissements" "d" JOIN "_backup_0006_projets" "p" ON "d"."projet_id" = "p"."id";--> statement-breakpoint

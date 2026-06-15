@@ -240,10 +240,14 @@ export default async function PageProjets({
                     <TableCell colSpan={2}>Total</TableCell>
                     <TableCell className="text-right">{formatEuro(totaux.budget)}</TableCell>
                     <TableCell className="text-right">{formatEuro(totaux.enc)}</TableCell>
-                    <TableCell className="text-right">{formatEuro(totaux.dec)}</TableCell>
-                    <TableCell className={`text-right ${totaux.marge < 0 ? "text-rose-600" : ""}`}>
-                      {formatEuro(totaux.marge)}
-                    </TableCell>
+                    {voirMarges ? (
+                      <TableCell className="text-right">{formatEuro(totaux.dec)}</TableCell>
+                    ) : null}
+                    {voirMarges ? (
+                      <TableCell className={`text-right ${totaux.marge < 0 ? "text-rose-600" : ""}`}>
+                        {formatEuro(totaux.marge)}
+                      </TableCell>
+                    ) : null}
                     <TableCell className="text-right">{formatEuro(totaux.reste)}</TableCell>
                   </TableRow>
                 </TableFooter>
