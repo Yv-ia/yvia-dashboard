@@ -44,9 +44,11 @@ export function peutEditerDelivery(session: AvecRole): boolean {
 // Restent fermés : / (dashboard) et /statistiques, intrinsèquement financiers.
 
 // Préfixes de routes accessibles au commercial (au-delà des pages publiques).
+// Le pipeline d'opportunités fait partie de son périmètre (aucune marge exposée).
 const ROUTES_COMMERCIAL = [
   "/clients",
   "/parametres",
+  "/opportunites",
   "/missions",
   "/projets",
   "/freelances",

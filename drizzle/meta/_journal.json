@@ -29,6 +29,20 @@
       "when": 1781465525680,
       "tag": "0003_statut_client",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781479814738,
+      "tag": "0004_opportunites",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781480028208,
+      "tag": "0005_recurrents",
+      "breakpoints": true
     }
   ]
 }

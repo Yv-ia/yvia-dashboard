@@ -53,6 +53,7 @@ describe("accès aux routes", () => {
     expect(peutAccederRoute(c, "/clients")).toBe(true);
     expect(peutAccederRoute(c, "/clients/123")).toBe(true); // sous-route éventuelle
     expect(peutAccederRoute(c, "/parametres")).toBe(true);
+    expect(peutAccederRoute(c, "/opportunites")).toBe(true); // pipeline commercial
     // Pages delivery : ouvertes (les marges y sont masquées côté affichage/requête).
     expect(peutAccederRoute(c, "/missions")).toBe(true);
     expect(peutAccederRoute(c, "/projets")).toBe(true);
