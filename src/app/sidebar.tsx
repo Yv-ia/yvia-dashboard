@@ -23,6 +23,7 @@ import {
   UserCog,
   Building2,
   BarChart3,
+  ListTodo,
   UserCircle,
   LogOut,
   Menu,
@@ -52,6 +53,7 @@ const SECTIONS: Section[] = [
       { href: "/missions", label: "Missions", icone: Briefcase },
       { href: "/projets", label: "Projets", icone: FolderKanban },
       { href: "/recurrents", label: "Récurrents", icone: Repeat },
+      { href: "/taches", label: "Tâches", icone: ListTodo },
     ],
   },
   {
