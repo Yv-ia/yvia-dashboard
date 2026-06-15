@@ -49,9 +49,9 @@ const SECTIONS: Section[] = [
     titre: "Activité",
     liens: [
       { href: "/opportunites", label: "Opportunités", icone: Target },
-      { href: "/missions", label: "Missions", icone: Briefcase },
-      { href: "/projets", label: "Projets", icone: FolderKanban },
-      { href: "/recurrents", label: "Récurrents", icone: Repeat },
+      { href: "/projets", label: "Projets Forfait", icone: FolderKanban },
+      { href: "/missions", label: "Régie", icone: Briefcase },
+      { href: "/recurrents", label: "Maintenance MCO", icone: Repeat },
     ],
   },
   {

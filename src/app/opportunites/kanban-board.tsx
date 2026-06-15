@@ -12,7 +12,7 @@ import { formatEuro } from "@/lib/format";
 import { EntityLink } from "@/app/_drawer/drawer-stack";
 import { Button } from "@/components/ui/button";
 import { grouperParStatut } from "@/lib/opportunites/kanban";
-import { labelTypeOpportunite } from "@/lib/opportunites/type";
+import { labelTypeOpportunite, normaliserTypeOpportunite } from "@/lib/opportunites/type";
 import { STATUT_COMMERCIAL_BADGE_CLASSES } from "@/lib/projets/statut-commercial";
 import { OpportuniteFormDialog } from "./opportunite-form-dialog";
 import {
@@ -33,6 +33,23 @@ export type OpportuniteKanban = {
   ordre: number;
   projetId: number | null;
 };
+
+// Un forfait est un montant fixe ; un récurrent (régie / MCO) est un montant par
+// mois. On suffixe « /mois » à l'affichage des montants récurrents.
+function suffixeMontant(type: string): string {
+  return normaliserTypeOpportunite(type) === "recurrent" ? " /mois" : "";
+}
+
+// Sous-total des montants estimés d'une colonne, ventilé par catégorie (type
+// d'opportunité : forfait / récurrent). Les montants nuls sont ignorés.
+function sousTotauxParType(items: OpportuniteKanban[]): { type: string; montant: number }[] {
+  const parType = new Map<string, number>();
+  for (const opp of items) {
+    if (opp.montantEstime == null) continue;
+    parType.set(opp.type, (parType.get(opp.type) ?? 0) + Number(opp.montantEstime));
+  }
+  return [...parType.entries()].map(([type, montant]) => ({ type, montant }));
+}
 
 export function KanbanBoard({
   opportunites,
@@ -72,7 +89,9 @@ export function KanbanBoard({
 
   return (
     <div className="flex gap-3 overflow-x-auto pb-2">
-      {colonnes.map((col) => (
+      {colonnes.map((col) => {
+        const sousTotaux = sousTotauxParType(col.items);
+        return (
         <section
           key={col.statut}
           onDragOver={(e) => e.preventDefault()}
@@ -90,6 +109,23 @@ export function KanbanBoard({
               {col.items.length}
             </span>
           </header>
+
+          {sousTotaux.length > 0 ? (
+            <div className="flex flex-col gap-0.5 rounded-md bg-background/70 px-2 py-1">
+              {sousTotaux.map(({ type, montant }) => (
+                <div
+                  key={type}
+                  className="flex justify-between text-[11px] text-muted-foreground"
+                >
+                  <span>{labelTypeOpportunite(type)}</span>
+                  <span className="tabular-nums font-medium text-foreground">
+                    {formatEuro(montant)}
+                    {suffixeMontant(type)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             {col.items.map((opp) => {
@@ -134,6 +170,7 @@ export function KanbanBoard({
                   {opp.montantEstime ? (
                     <p className="mt-1 text-sm font-medium tabular-nums">
                       {formatEuro(Number(opp.montantEstime))}
+                      {suffixeMontant(opp.type)}
                     </p>
                   ) : null}
 
@@ -158,7 +195,8 @@ export function KanbanBoard({
             ) : null}
           </div>
         </section>
-      ))}
+        );
+      })}
     </div>
   );
 }

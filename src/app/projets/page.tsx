@@ -163,9 +163,9 @@ export default async function PageProjets({
         action={
           <ProjetFormDialog
             action={creerProjet}
-            titre="Nouveau projet"
+            titre="Nouveau projet forfait"
             clientsListe={clientsListe}
-            trigger={<Button>Nouveau projet</Button>}
+            trigger={<Button>Nouveau projet forfait</Button>}
           />
         }
       >
@@ -190,14 +190,14 @@ export default async function PageProjets({
       <Card>
         <CardHeader>
           <CardTitle>
-            {liste.length} projet{liste.length > 1 ? "s" : ""}
+            {liste.length} projet{liste.length > 1 ? "s" : ""} forfait
             {termines ? " terminé" + (liste.length > 1 ? "s" : "") : ""}
           </CardTitle>
         </CardHeader>
         <CardContent>
           {liste.length === 0 ? (
             <p className="text-sm text-muted-foreground">
-              {termines ? "Aucun projet terminé." : "Aucun projet pour l’instant."}
+              {termines ? "Aucun projet forfait terminé." : "Aucun projet forfait pour l’instant."}
             </p>
           ) : (
             <Table>

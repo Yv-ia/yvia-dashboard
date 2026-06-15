@@ -7,18 +7,8 @@ import { eq } from "drizzle-orm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableFooter,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { formatEuro } from "@/lib/format";
 import { MissionFormDialog } from "./mission-form-dialog";
-import { MissionRow } from "./mission-row";
+import { MissionsParClient, type GroupeClient } from "./missions-par-client";
 import { creerMission } from "./actions";
 
 const filtres = [
@@ -69,11 +59,28 @@ export default async function PageMissions({
 
   const actives = filtreActif !== "inactives";
   const liste = missionsRows.filter((m) => m.actif === actives);
-  // Marge/jour cumulée du portefeuille affiché (run-rate journalier si chaque
-  // mission facturait un jour). Sommer les TJM eux-mêmes n'aurait pas de sens.
-  const totalMargeJour = liste.reduce(
-    (s, m) => s + (Number(m.tjmVente) - Number(m.tjmAchat)),
-    0
+
+  // Groupement par client : une entrée par client, avec le cumul marge/jour
+  // (run-rate journalier si chaque mission facturait un jour) et TJM vente. Un
+  // freelance peut apparaître sous plusieurs clients (une ligne par mission).
+  const groupesMap = new Map<number, GroupeClient>();
+  for (const m of liste) {
+    const g =
+      groupesMap.get(m.clientId) ?? {
+        clientId: m.clientId,
+        clientNom: m.clientNom,
+        missions: [],
+        totalMargeJour: 0,
+        totalTjmVente: 0,
+      };
+    g.missions.push(m);
+    g.totalTjmVente += Number(m.tjmVente);
+    // tjmAchat absent pour le commercial : la marge reste alors à 0 (non affichée).
+    if (voirMarges) g.totalMargeJour += Number(m.tjmVente) - Number(m.tjmAchat);
+    groupesMap.set(m.clientId, g);
+  }
+  const groupes = Array.from(groupesMap.values()).sort((a, b) =>
+    a.clientNom.localeCompare(b.clientNom)
   );
 
   return (
@@ -117,33 +124,7 @@ export default async function PageMissions({
               {actives ? "Aucune mission active." : "Aucune mission inactive."}
             </p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mission</TableHead>
-                  <TableHead>Freelance</TableHead>
-                  <TableHead>Client</TableHead>
-                  {voirMarges ? <TableHead className="text-right">TJM achat</TableHead> : null}
-                  <TableHead className="text-right">TJM vente</TableHead>
-                  {voirMarges ? <TableHead className="text-right">Marge / jour</TableHead> : null}
-                  <TableHead>Statut</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {liste.map((mission) => (
-                  <MissionRow key={mission.id} l={mission} voirMarges={voirMarges} />
-                ))}
-              </TableBody>
-              {liste.length > 1 ? (
-                <TableFooter>
-                  <TableRow>
-                    <TableCell colSpan={5}>Total marge / jour</TableCell>
-                    <TableCell className="text-right">{formatEuro(totalMargeJour)}</TableCell>
-                    <TableCell />
-                  </TableRow>
-                </TableFooter>
-              ) : null}
-            </Table>
+            <MissionsParClient groupes={groupes} voirMarges={voirMarges} />
           )}
         </CardContent>
       </Card>
