@@ -2,7 +2,7 @@
 // Chargement à la demande du détail d'une entité pour les drawers en cascade,
 // édition inline d'un champ, et bascule actif/inactif (bouton au bas du drawer).
 
-import { and, eq, gte, lte, ne } from "drizzle-orm";
+import { and, count, eq, gte, lte, ne } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import {
@@ -16,14 +16,14 @@ import {
   decaissements,
 } from "@/db/schema";
 import { getSession } from "@/lib/auth/server";
-import { estAdmin } from "@/lib/auth/session";
-import { labelRole, peutVoirMarges } from "@/lib/auth/permissions";
+import { estAdmin, type Session } from "@/lib/auth/session";
+import { labelRole, peutSupprimerEntites, peutVoirMarges } from "@/lib/auth/permissions";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculMissionRealisee } from "@/lib/calculs/marge";
 import { formatEuro, formatJours } from "@/lib/format";
 import { labelStatutCommercial, normaliserStatutCommercial } from "@/lib/projets/statut-commercial";
 import { STATUTS_CLIENT, normaliserStatutClient } from "@/lib/clients/statut";
-import type { DetailEntite, EntiteRef } from "./types";
+import type { DetailEntite, EntiteRef, SuppressionEntite } from "./types";
 
 const arrondi = (n: number) => Math.round(n * 100) / 100;
 // Montant sans décimales (les TJM/budgets sont saisis en euros entiers).
@@ -44,21 +44,127 @@ export async function chargerEntite(ref: EntiteRef): Promise<DetailEntite | null
   // des coûts/marges (TJM achat, décaissements, marge).
   if (!peutVoirMarges(session) && ref.type !== "client") return null;
 
+  let detail: DetailEntite | null;
   switch (ref.type) {
     case "freelance":
-      return chargerFreelance(ref.id);
+      detail = await chargerFreelance(ref.id);
+      break;
     case "client":
-      return chargerClient(ref.id);
+      detail = await chargerClient(ref.id);
+      break;
     case "mission":
-      return chargerMission(ref.id);
+      detail = await chargerMission(ref.id);
+      break;
     case "projet":
-      return chargerProjet(ref.id);
+      detail = await chargerProjet(ref.id);
+      break;
     case "user":
       if (!estAdmin(session)) return null;
       return chargerUser(ref.id);
     default:
       return null;
   }
+
+  // Bouton « Supprimer définitivement » : admin uniquement, et seulement quand
+  // l'entité n'a pas de dépendance bloquante (cf. descripteurSuppression).
+  if (detail) detail.suppression = await descripteurSuppression(session, ref);
+  return detail;
+}
+
+// Dépendance « dure » (FK sans cascade) qui interdit la suppression et impose
+// l'archivage. Source UNIQUE de la règle, partagée par l'affichage du bouton
+// (descripteurSuppression) et l'exécution (supprimerEntite) pour qu'ils ne
+// puissent pas diverger. Renvoie le message d'impossibilité, ou null si OK.
+async function blocageSuppression(ref: EntiteRef): Promise<string | null> {
+  if (ref.type === "client") {
+    const [nbMissions, nbProjets] = await Promise.all([
+      compterMissionsClient(ref.id),
+      compterProjetsClient(ref.id),
+    ]);
+    if (nbMissions > 0 || nbProjets > 0) {
+      return "Suppression impossible : des missions ou des projets sont rattachés à ce client. Archivez-le plutôt.";
+    }
+  } else if (ref.type === "freelance") {
+    const [nbMissions, nbDec] = await Promise.all([
+      compterMissionsFreelance(ref.id),
+      compterDecaissementsFreelance(ref.id),
+    ]);
+    if (nbMissions > 0 || nbDec > 0) {
+      return "Suppression impossible : des missions ou des décaissements sont rattachés à ce freelance. Archivez-le plutôt.";
+    }
+  }
+  return null;
+}
+
+// Décrit la suppression définitive proposée à l'admin, ou `undefined` si elle
+// n'est pas permise (rôle insuffisant ou dépendances qui imposent l'archivage).
+// Les cascades de la base (affectations, jalons, échéances) sont signalées dans
+// l'avertissement pour que l'admin sache ce qui partira avec l'entité.
+async function descripteurSuppression(
+  session: Session,
+  ref: EntiteRef
+): Promise<SuppressionEntite | undefined> {
+  if (!peutSupprimerEntites(session)) return undefined;
+  if (await blocageSuppression(ref)) return undefined; // archivage obligatoire
+
+  switch (ref.type) {
+    case "client":
+      return { avertissement: "Le client sera définitivement supprimé. Cette action est irréversible." };
+    case "freelance": {
+      const nbJours = await compterAffectationsFreelance(ref.id);
+      const jours = nbJours > 0 ? ` ${nbJours} jour(s) de planning seront aussi supprimés.` : "";
+      return {
+        avertissement: `Le freelance sera définitivement supprimé.${jours} Cette action est irréversible.`,
+      };
+    }
+    case "mission": {
+      const nbJours = await compterAffectationsMission(ref.id);
+      const jours = nbJours > 0 ? ` ${nbJours} jour(s) de planning rattachés seront aussi supprimés.` : "";
+      return {
+        avertissement: `La mission sera définitivement supprimée.${jours} Cette action est irréversible.`,
+      };
+    }
+    case "projet":
+      return {
+        avertissement:
+          "Le projet et toutes ses échéances (encaissements, décaissements, jalons) seront définitivement supprimés. Cette action est irréversible.",
+      };
+    default:
+      return undefined;
+  }
+}
+
+// Compteurs de dépendances (FK sans cascade) qui décident si une suppression
+// est possible, et cascades signalées dans l'avertissement.
+async function compterMissionsClient(id: number): Promise<number> {
+  const [r] = await db.select({ n: count() }).from(missions).where(eq(missions.clientId, id));
+  return Number(r?.n ?? 0);
+}
+async function compterProjetsClient(id: number): Promise<number> {
+  const [r] = await db.select({ n: count() }).from(projets).where(eq(projets.clientId, id));
+  return Number(r?.n ?? 0);
+}
+async function compterMissionsFreelance(id: number): Promise<number> {
+  const [r] = await db.select({ n: count() }).from(missions).where(eq(missions.freelanceId, id));
+  return Number(r?.n ?? 0);
+}
+async function compterDecaissementsFreelance(id: number): Promise<number> {
+  const [r] = await db
+    .select({ n: count() })
+    .from(decaissements)
+    .where(eq(decaissements.freelanceId, id));
+  return Number(r?.n ?? 0);
+}
+async function compterAffectationsFreelance(id: number): Promise<number> {
+  const [r] = await db
+    .select({ n: count() })
+    .from(affectations)
+    .where(eq(affectations.freelanceId, id));
+  return Number(r?.n ?? 0);
+}
+async function compterAffectationsMission(id: number): Promise<number> {
+  const [r] = await db.select({ n: count() }).from(affectations).where(eq(affectations.missionId, id));
+  return Number(r?.n ?? 0);
 }
 
 async function chargerUser(id: number): Promise<DetailEntite | null> {
@@ -465,4 +571,48 @@ export async function basculerActif(ref: EntiteRef): Promise<{ ok: boolean; acti
 
   revalidatePath("/", "layout");
   return { ok: true, actif: nouveau };
+}
+
+// Suppression DÉFINITIVE d'une entité (admin uniquement). Réversible côté métier
+// uniquement par recréation : on refuse donc quand des dépendances « dures »
+// (missions/projets pour un client, missions/décaissements pour un freelance)
+// imposeraient sinon une perte de cohérence ; dans ce cas l'admin doit archiver.
+// Les dépendances en cascade (affectations, jalons, échéances) partent avec
+// l'entité via les contraintes ON DELETE CASCADE du schéma.
+export async function supprimerEntite(
+  ref: EntiteRef
+): Promise<{ ok: boolean; message?: string }> {
+  const session = await getSession();
+  if (!session) return { ok: false, message: "Vous n'êtes pas connecté." };
+  if (!peutSupprimerEntites(session)) {
+    return { ok: false, message: "Seul un administrateur peut supprimer définitivement une entité." };
+  }
+
+  // Re-vérifie la règle de blocage à l'exécution (l'état a pu changer depuis
+  // l'ouverture du drawer), avec le MÊME message que l'affichage.
+  const blocage = await blocageSuppression(ref);
+  if (blocage) return { ok: false, message: blocage };
+
+  switch (ref.type) {
+    case "client":
+      await db.delete(clients).where(eq(clients.id, ref.id));
+      break;
+    case "freelance":
+      // Les affectations (planning) partent en cascade.
+      await db.delete(freelances).where(eq(freelances.id, ref.id));
+      break;
+    case "mission":
+      // Les affectations rattachées partent en cascade.
+      await db.delete(missions).where(eq(missions.id, ref.id));
+      break;
+    case "projet":
+      // Jalons, encaissements et décaissements partent en cascade.
+      await db.delete(projets).where(eq(projets.id, ref.id));
+      break;
+    default:
+      return { ok: false, message: "Cette entité ne peut pas être supprimée." };
+  }
+
+  revalidatePath("/", "layout");
+  return { ok: true };
 }

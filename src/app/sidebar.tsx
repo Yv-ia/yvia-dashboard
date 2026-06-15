@@ -14,8 +14,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  CalendarRange,
   Briefcase,
   FolderKanban,
+  Target,
+  Repeat,
   Users,
   UserCog,
   Building2,
@@ -38,13 +41,18 @@ type Section = { titre?: string; liens: Lien[] };
 
 const SECTIONS: Section[] = [
   {
-    liens: [{ href: "/", label: "Dashboard", icone: LayoutDashboard, match: ["/"] }],
+    liens: [
+      { href: "/", label: "Dashboard", icone: LayoutDashboard, match: ["/"] },
+      { href: "/planning", label: "Planning", icone: CalendarRange },
+    ],
   },
   {
     titre: "Activité",
     liens: [
+      { href: "/opportunites", label: "Opportunités", icone: Target },
       { href: "/missions", label: "Missions", icone: Briefcase },
       { href: "/projets", label: "Projets", icone: FolderKanban },
+      { href: "/recurrents", label: "Récurrents", icone: Repeat },
     ],
   },
   {
