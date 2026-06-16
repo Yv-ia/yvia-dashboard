@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
-import { projets, clients, freelances, encaissements, decaissements, jalons } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { projets, clients, freelances, missions, encaissements, decaissements, jalons } from "@/db/schema";
+import { eq, isNull, isNotNull } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ListViewToolbar } from "@/components/list-view-toolbar";
 import {
@@ -11,6 +11,7 @@ import {
   type ProjetComplet,
 } from "./tresorerie-echeances";
 import { EncaissementsParDeal, type DealEncaissement } from "./encaissements-par-deal";
+import { EncaissementsDirects, type EncaissementDirect } from "./encaissements-directs";
 
 const ONGLETS = [
   { cle: "encaissements", label: "Encaissements" },
@@ -28,7 +29,8 @@ export default async function PageTresorerie({
   const aujourdhui = new Date().toISOString().slice(0, 10);
 
   // Trésorerie = échéancier des projets ACTIFS (entrées client / sorties freelances).
-  const [projetsRows, encRows, decRows, jalRows, freelancesActifs] = await Promise.all([
+  const [projetsRows, encRows, decRows, jalRows, freelancesActifs, clientsActifs, missionsActives, encDirectsRows] =
+    await Promise.all([
       db
         .select({
           id: projets.id,
@@ -54,7 +56,8 @@ export default async function PageTresorerie({
           statut: encaissements.statut,
           fiabilite: encaissements.fiabilite,
         })
-        .from(encaissements),
+        .from(encaissements)
+        .where(isNotNull(encaissements.projetId)), // échéancier forfait uniquement
       db
         .select({
           id: decaissements.id,
@@ -76,6 +79,35 @@ export default async function PageTresorerie({
         .from(freelances)
         .where(eq(freelances.actif, true))
         .orderBy(freelances.nom),
+      // Clients actifs : options du formulaire d'encaissement direct.
+      db
+        .select({ id: clients.id, nom: clients.nom })
+        .from(clients)
+        .where(eq(clients.actif, true))
+        .orderBy(clients.nom),
+      // Missions actives : options (filtrées par client côté client).
+      db
+        .select({ id: missions.id, nom: missions.nom, clientId: missions.clientId })
+        .from(missions)
+        .where(eq(missions.actif, true))
+        .orderBy(missions.nom),
+      // Encaissements DIRECTS (hors deal forfait) : projet_id IS NULL.
+      db
+        .select({
+          id: encaissements.id,
+          date: encaissements.date,
+          montant: encaissements.montant,
+          libelle: encaissements.libelle,
+          statut: encaissements.statut,
+          clientId: encaissements.clientId,
+          clientNom: clients.nom,
+          missionId: encaissements.missionId,
+          missionNom: missions.nom,
+        })
+        .from(encaissements)
+        .innerJoin(clients, eq(encaissements.clientId, clients.id))
+        .leftJoin(missions, eq(encaissements.missionId, missions.id))
+        .where(isNull(encaissements.projetId)),
     ]);
 
   const projetsActifs = new Map(projetsRows.map((p) => [p.id, p]));
@@ -100,6 +132,7 @@ export default async function PageTresorerie({
     };
   }
   for (const e of encRows) {
+    if (e.projetId == null) continue; // sécurité : pas d'encaissement direct ici
     projetsParId[e.projetId]?.encaissements.push({
       id: e.id,
       date: e.date,
@@ -149,6 +182,19 @@ export default async function PageTresorerie({
     };
   });
 
+  // Encaissements DIRECTS = événements de paiement client/mission (hors forfait).
+  const encaissementsDirects: EncaissementDirect[] = encDirectsRows.map((e) => ({
+    id: e.id,
+    date: e.date,
+    montant: e.montant,
+    libelle: e.libelle,
+    statut: e.statut,
+    clientId: e.clientId!,
+    clientNom: e.clientNom,
+    missionId: e.missionId,
+    missionNom: e.missionNom,
+  }));
+
   // Décaissements = échéancier (par échéance) des projets actifs, trié par date.
   const echeancesDec: EcheanceTresorerie[] = decRows
     .filter((d) => projetsActifs.has(d.projetId))
@@ -193,11 +239,19 @@ export default async function PageTresorerie({
         </CardHeader>
         <CardContent className="space-y-4">
           {type === "encaissement" ? (
-            <EncaissementsParDeal
-              deals={deals}
-              projetsParId={projetsParId}
-              freelancesActifs={freelancesActifs}
-            />
+            <div className="space-y-6">
+              <EncaissementsParDeal
+                deals={deals}
+                projetsParId={projetsParId}
+                freelancesActifs={freelancesActifs}
+              />
+              <EncaissementsDirects
+                encaissements={encaissementsDirects}
+                clientsActifs={clientsActifs}
+                missionsActives={missionsActives}
+                aujourdhui={aujourdhui}
+              />
+            </div>
           ) : (
             <TresorerieEcheances
               type="decaissement"

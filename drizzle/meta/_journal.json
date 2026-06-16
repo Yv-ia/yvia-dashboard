@@ -64,6 +64,13 @@
       "when": 1781528168396,
       "tag": "0008_ajout_date_gagne",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781565879413,
+      "tag": "0009_encaissements_directs",
+      "breakpoints": true
     }
   ]
 }
