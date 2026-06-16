@@ -28,6 +28,12 @@ export function formatDate(dateISO: string | null): string {
   return `${jour}/${mois}/${annee}`;
 }
 
+// Mois en toutes lettres d'une date "AAAA-MM-JJ", ex : "2026-05-12" -> "mai 2026".
+export function formatMoisDepuisDate(dateISO: string): string {
+  const [annee, mois] = dateISO.split("-").map(Number);
+  return formatMois(annee, mois);
+}
+
 // Pourcentage, ex : 0.2308 -> "23 %".
 export function formatPourcent(ratio: number): string {
   return new Intl.NumberFormat("fr-FR", {

@@ -8,7 +8,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatEuro } from "@/lib/format";
+import { formatEuro, formatMoisDepuisDate } from "@/lib/format";
+import { moisDeDate } from "@/lib/opportunites/gagnees";
 import { EntityLink } from "@/app/_drawer/drawer-stack";
 import { Button } from "@/components/ui/button";
 import { grouperParStatut } from "@/lib/opportunites/kanban";
@@ -55,9 +56,12 @@ function sousTotauxParType(items: OpportuniteKanban[]): { type: string; montant:
 export function KanbanBoard({
   opportunites,
   clientsListe,
+  moisCourant,
 }: {
   opportunites: OpportuniteKanban[];
   clientsListe: { id: number; nom: string }[];
+  // Mois courant 'YYYY-MM' : sert à marquer une gagnée comme « ce mois-ci » ou non.
+  moisCourant: string;
 }) {
   const router = useRouter();
   const [draggedId, setDraggedId] = useState<number | null>(null);
@@ -172,6 +176,21 @@ export function KanbanBoard({
                     <p className="mt-1 text-sm font-medium tabular-nums">
                       {formatEuro(Number(opp.montantEstime))}
                       {suffixeMontant(opp.type)}
+                    </p>
+                  ) : null}
+
+                  {col.statut === "gagne" && opp.dateGagne ? (
+                    <p
+                      className={cn(
+                        "mt-1 inline-flex w-fit rounded-sm px-1.5 py-0.5 text-[10px] font-medium",
+                        moisDeDate(opp.dateGagne) === moisCourant
+                          ? "bg-emerald-50 text-emerald-700"
+                          : "bg-secondary text-muted-foreground"
+                      )}
+                    >
+                      {moisDeDate(opp.dateGagne) === moisCourant
+                        ? "Gagné ce mois-ci"
+                        : `Gagné en ${formatMoisDepuisDate(opp.dateGagne)}`}
                     </p>
                   ) : null}
 
