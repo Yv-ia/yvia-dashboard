@@ -13,6 +13,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  LayoutDashboard,
   CalendarRange,
   Briefcase,
   Target,
@@ -44,7 +45,10 @@ type Section = { titre?: string; liens: Lien[] };
 
 const SECTIONS: Section[] = [
   {
-    liens: [{ href: "/planning", label: "Planning", icone: CalendarRange }],
+    liens: [
+      { href: "/dashboard", label: "Dashboard", icone: LayoutDashboard },
+      { href: "/planning", label: "Planning", icone: CalendarRange },
+    ],
   },
   {
     titre: "Activité",
