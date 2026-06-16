@@ -23,6 +23,7 @@ import {
   Building2,
   BarChart3,
   LineChart,
+  TrendingUp,
   Wallet,
   UserCircle,
   LogOut,
@@ -35,7 +36,9 @@ import type { Role } from "@/lib/auth/session";
 import { peutAccederRoute, peutGererUtilisateurs } from "@/lib/auth/permissions";
 
 // `match` = préfixes de chemin qui rendent l'onglet actif (regroupements de sous-pages).
-type Lien = { href: string; label: string; icone: LucideIcon; match?: string[] };
+// `exact` = ne s'active que sur le chemin exact (utile quand une sous-page a son
+// propre onglet, ex : /statistiques vs /statistiques/previsionnel).
+type Lien = { href: string; label: string; icone: LucideIcon; match?: string[]; exact?: boolean };
 // Une section regroupe des liens sous un titre optionnel (le Dashboard reste sans titre, en tête).
 type Section = { titre?: string; liens: Lien[] };
 
@@ -63,7 +66,8 @@ const SECTIONS: Section[] = [
     titre: "Analyse & Admin",
     liens: [
       { href: "/", label: "Rentabilité", icone: LineChart, match: ["/"] },
-      { href: "/statistiques", label: "Pilotage", icone: BarChart3 },
+      { href: "/statistiques", label: "Cockpit mensuel", icone: BarChart3, exact: true },
+      { href: "/statistiques/previsionnel", label: "Prévisionnel 12 mois", icone: TrendingUp },
       { href: "/tresorerie", label: "Trésorerie", icone: Wallet },
       { href: "/users", label: "Users", icone: UserCog },
     ],
@@ -71,6 +75,7 @@ const SECTIONS: Section[] = [
 ];
 
 function estActif(lien: Lien, pathname: string) {
+  if (lien.exact) return pathname === lien.href;
   const motifs = lien.match ?? [lien.href];
   return motifs.some((m) => (m === "/" ? pathname === "/" : pathname.startsWith(m)));
 }

@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/table";
 import { formatEuro } from "@/lib/format";
 import { exigerSession } from "@/lib/auth/server";
-import { OngletsPilotage } from "../onglets-pilotage";
 import { calculerPrevisionnel12Mois } from "../previsionnel-calculs";
 
 const MOIS_COURT = [
@@ -104,8 +103,7 @@ export default async function PagePrevisionnel({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <OngletsPilotage actif="previsionnel" />
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex items-center gap-1">
           <Button
             variant="outline"
