@@ -13,15 +13,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
   CalendarRange,
   Briefcase,
   Target,
   Repeat,
+  ListTodo,
   Users,
   UserCog,
   Building2,
   BarChart3,
+  LineChart,
   Wallet,
   UserCircle,
   LogOut,
@@ -40,10 +41,7 @@ type Section = { titre?: string; liens: Lien[] };
 
 const SECTIONS: Section[] = [
   {
-    liens: [
-      { href: "/", label: "Dashboard", icone: LayoutDashboard, match: ["/"] },
-      { href: "/planning", label: "Planning", icone: CalendarRange },
-    ],
+    liens: [{ href: "/planning", label: "Planning", icone: CalendarRange }],
   },
   {
     titre: "Activité",
@@ -51,6 +49,7 @@ const SECTIONS: Section[] = [
       { href: "/opportunites", label: "Opportunités", icone: Target },
       { href: "/regie", label: "Régie", icone: Briefcase, match: ["/regie", "/missions"] },
       { href: "/recurrents", label: "Maintenance MCO", icone: Repeat },
+      { href: "/todo", label: "To-do", icone: ListTodo },
     ],
   },
   {
@@ -63,6 +62,7 @@ const SECTIONS: Section[] = [
   {
     titre: "Analyse & Admin",
     liens: [
+      { href: "/", label: "Rentabilité", icone: LineChart, match: ["/"] },
       { href: "/statistiques", label: "Pilotage", icone: BarChart3 },
       { href: "/tresorerie", label: "Trésorerie", icone: Wallet },
       { href: "/users", label: "Users", icone: UserCog },
