@@ -2,11 +2,8 @@ import { db } from "@/db";
 import { exigerSession } from "@/lib/auth/server";
 import { opportunites, clients } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { Button } from "@/components/ui/button";
-import { ListViewToolbar } from "@/components/list-view-toolbar";
-import { KanbanBoard } from "./kanban-board";
-import { OpportuniteFormDialog } from "./opportunite-form-dialog";
-import { creerOpportunite } from "./actions";
+import { moisCourantDe, separerGagneesArchivees } from "@/lib/opportunites/gagnees";
+import { OpportunitesVue } from "./opportunites-vue";
 
 export default async function PageOpportunites() {
   await exigerSession();
@@ -36,24 +33,17 @@ export default async function PageOpportunites() {
       .orderBy(clients.nom),
   ]);
 
-  return (
-    <div className="space-y-6">
-      <ListViewToolbar
-        action={
-          <OpportuniteFormDialog
-            action={creerOpportunite}
-            clientsListe={clientsListe}
-            titre="Nouvelle opportunité"
-            trigger={<Button>Nouvelle opportunité</Button>}
-          />
-        }
-      >
-        <p className="text-sm text-muted-foreground">
-          {opps.length} opportunité{opps.length > 1 ? "s" : ""} en cours
-        </p>
-      </ListViewToolbar>
+  // Les gagnées des mois révolus quittent le tableau et passent dans les archives
+  // (dérivé de dateGagne, sans écriture en base — le CA reste booké au mois de signature).
+  const moisCourant = moisCourantDe(new Date());
+  const { tableau, archivees } = separerGagneesArchivees(opps, moisCourant);
 
-      <KanbanBoard opportunites={opps} clientsListe={clientsListe} />
-    </div>
+  return (
+    <OpportunitesVue
+      tableau={tableau}
+      archivees={archivees}
+      clientsListe={clientsListe}
+      moisCourant={moisCourant}
+    />
   );
 }
