@@ -300,6 +300,56 @@ export function construireSimulation(maintenant = new Date()) {
     },
   ];
 
+  // Encaissements DIRECTS (régie / hors forfait) : paiements reçus d'un client pour
+  // une mission, saisis dans la Trésorerie. `mission` = libellé d'une mission (ou null).
+  const encaissementsDirects = [
+    {
+      client: "Wenimmo",
+      mission: "Refonte site Wenimmo",
+      date: dateDansMois(reference, -1, 5),
+      montant: 14000,
+      libelle: "Facture régie - mois M-1",
+      statut: "encaisse",
+      fiabilite: null,
+    },
+    {
+      client: "APG",
+      mission: "Support technique APG",
+      date: dateDansMois(reference, 0, realiseCourant),
+      montant: 9800,
+      libelle: "Facture régie - mois courant",
+      statut: "encaisse",
+      fiabilite: null,
+    },
+    {
+      client: "Delta",
+      mission: "Plateforme data Delta",
+      date: dateDansMois(reference, 0, prevuCourant),
+      montant: 12500,
+      libelle: "Facture en attente de paiement",
+      statut: "prevu",
+      fiabilite: "80",
+    },
+    {
+      client: "Banque Atlas",
+      mission: "Sécurisation API Atlas",
+      date: dateDansMois(reference, -1, 22),
+      montant: 18000,
+      libelle: "Régie sécurité",
+      statut: "prevu",
+      fiabilite: "60",
+    },
+    {
+      client: "Nova Santé",
+      mission: null,
+      date: dateDansMois(reference, 1, 10),
+      montant: 6000,
+      libelle: "Avenant ponctuel",
+      statut: "prevu",
+      fiabilite: "50",
+    },
+  ];
+
   return {
     reference: isoJour(reference),
     utilisateurs,
@@ -312,5 +362,6 @@ export function construireSimulation(maintenant = new Date()) {
     freelances,
     missions,
     projets,
+    encaissementsDirects,
   };
 }

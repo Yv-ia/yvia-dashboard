@@ -144,14 +144,22 @@ export const jalons = pgTable("jalons", {
   libelle: text("libelle").notNull(), // ce qui décrit l'étape (obligatoire)
 });
 
-// --- ENCAISSEMENTS / ÉCHÉANCIER DE RECETTE (argent du client, rattaché à un projet) ---
+// --- ENCAISSEMENTS / ÉCHÉANCIER DE RECETTE (argent reçu d'un client) ---
 // Une ligne = une échéance de recette. statut='encaisse' = argent reçu (certain),
 // statut='prevu' = paiement attendu (pondéré par sa fiabilité dans le prévisionnel).
+//
+// Deux natures de rattachement :
+//   - FORFAIT : `projetId` renseigné → échéance de l'enveloppe d'un projet (CA/prévisionnel).
+//   - DIRECT / RÉGIE : `projetId` null, `clientId` renseigné (et `missionId` optionnel)
+//     → un paiement reçu d'un client pour une mission, saisi dans la Trésorerie.
+// `projetId` est donc nullable. Les vues CA/prévisionnel joignent sur `projets`,
+// elles ignorent naturellement les encaissements directs (sans projet).
 export const encaissements = pgTable("encaissements", {
   id: serial("id").primaryKey(),
-  projetId: integer("projet_id")
-    .notNull()
-    .references(() => projets.id, { onDelete: "cascade" }),
+  projetId: integer("projet_id").references(() => projets.id, { onDelete: "cascade" }),
+  // Encaissement direct : client payeur (et, optionnellement, la mission concernée).
+  clientId: integer("client_id").references(() => clients.id),
+  missionId: integer("mission_id").references(() => missions.id),
   date: date("date").notNull(), // date réelle si encaissé, date attendue si prévu
   montant: numeric("montant", { precision: 12, scale: 2 }).notNull(), // € HT
   libelle: text("libelle"), // optionnel (ex : acompte, jalon 1...)

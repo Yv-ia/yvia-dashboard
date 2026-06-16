@@ -9,13 +9,18 @@ import {
   opportunites,
   todos,
 } from "@/db/schema";
-import { and, asc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, ne } from "drizzle-orm";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { premierJourDuMois, dernierJourDuMois } from "@/lib/calculs/jours-ouvres";
 import { calculerPrevisionnel12Mois } from "./statistiques/previsionnel-calculs";
 import { calculerIndicateursMois } from "@/lib/rentabilite/indicateurs";
-import { formatEuro } from "@/lib/format";
+import {
+  projeterRecurrent,
+  totaliserProjection,
+  type PlanningMensuel,
+} from "@/lib/recurrents/previsionnel";
+import { formatEuro, formatPourcent } from "@/lib/format";
 import { NavigationMois } from "./navigation-mois";
 import { EpicsCard } from "./todo/epics-card";
 import { exigerSession } from "@/lib/auth/server";
@@ -57,16 +62,25 @@ export default async function PageRentabilite({
     forfaitsGagnes,
     recsRegie,
     recsNonRegie,
+    decAnnee,
     regieFenetre,
-    encFenetre,
+    encForfaitsFenetre,
+    encDirectsFenetre,
     decFenetre,
     epics,
   ] = await Promise.all([
     // --- Sources annuelles du prévisionnel (mêmes requêtes que /statistiques/previsionnel) ---
+    // Régie réel : tous les jours posés de l'année (date + TJM vente + TJM achat
+    // pour le coût prévisionnel régie).
     db
-      .select({ date: affectations.date, tjmVente: affectations.tjmVente })
+      .select({
+        date: affectations.date,
+        tjmVente: affectations.tjmVente,
+        tjmAchat: affectations.tjmAchat,
+      })
       .from(affectations)
       .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
+    // Forfait : booking des deals forfait GAGNÉS, par mois de signature (date_gagne).
     db
       .select({ dateGagne: opportunites.dateGagne, montant: opportunites.montantEstime })
       .from(opportunites)
@@ -78,15 +92,30 @@ export default async function PageRentabilite({
           lte(opportunites.dateGagne, finAnnee)
         )
       ),
+    // Régie macro : hypothèses (récurrents catégorie régie) -> relais des mois non planifiés.
     db
       .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), eq(recurrents.categorie, "regie"))),
+    // Récurrence : contrats RUN / licence (la régie est portée par sa propre ligne).
     db
       .select(champsRecurrent)
       .from(recurrents)
       .where(and(eq(recurrents.actif, true), ne(recurrents.categorie, "regie"))),
-    // --- Réalisé sur la fenêtre [mois précédent → mois affiché] pour les KPI ---
+    // Coût forfait : décaissements de l'année (réalisés + prévus = prévisionnel plein).
+    db
+      .select({ montant: decaissements.montant })
+      .from(decaissements)
+      .innerJoin(projets, eq(decaissements.projetId, projets.id))
+      .where(
+        and(
+          eq(projets.actif, true),
+          ne(projets.statutCommercial, "perdu"),
+          gte(decaissements.date, debutAnnee),
+          lte(decaissements.date, finAnnee)
+        )
+      ),
+    // --- Réalisé sur la fenêtre [mois précédent -> mois affiché] pour les KPI ---
     // Régie réelle : jours posés (CA = TJM vente, coût = TJM achat), par client.
     db
       .select({
@@ -112,6 +141,22 @@ export default async function PageRentabilite({
           eq(encaissements.statut, "encaisse"),
           eq(projets.actif, true),
           ne(projets.statutCommercial, "perdu"),
+          gte(encaissements.date, debutMoisPrec),
+          lte(encaissements.date, finMois)
+        )
+      ),
+    // Encaissements directs réalisés (hors deal forfait), désormais portés par client.
+    db
+      .select({
+        clientId: encaissements.clientId,
+        date: encaissements.date,
+        montant: encaissements.montant,
+      })
+      .from(encaissements)
+      .where(
+        and(
+          eq(encaissements.statut, "encaisse"),
+          isNull(encaissements.projetId),
           gte(encaissements.date, debutMoisPrec),
           lte(encaissements.date, finMois)
         )
@@ -147,8 +192,12 @@ export default async function PageRentabilite({
       .orderBy(asc(todos.ordre), asc(todos.id)),
   ]);
 
+  const arrondi = (n: number) => Math.round(n * 100) / 100;
+
   // CA prévisionnel de l'année, ventilé par source — calcul partagé avec la page
-  // /statistiques/previsionnel pour garantir des chiffres cohérents.
+  // /statistiques/previsionnel pour garantir des chiffres cohérents (régie =
+  // planning réel + hypothèse macro, forfait = booking des deals gagnés,
+  // récurrence = RUN/licence).
   const versRecurrentPrevisionnel = (r: (typeof recsRegie)[number]) => ({
     categorie: r.categorie,
     montantRecurrent: Number(r.montantRecurrent),
@@ -168,6 +217,35 @@ export default async function PageRentabilite({
   const caMcoAnnee = previsionnel.recurrence;
   const caAnnuelTotal = previsionnel.total;
 
+  // Coût prévisionnel de l'année, même maille que le CA (pour comparer l'annuel à
+  // l'annuel) : régie = TJM achat du planning réel ; MCO = coût projeté des
+  // récurrents RUN/licence ; forfait = décaissements de l'année.
+  const horizonAnnee = Array.from(
+    { length: 12 },
+    (_, i) => `${annee}-${String(i + 1).padStart(2, "0")}`
+  );
+  const planningVide: PlanningMensuel = new Map();
+  const coutRegieAnnee = arrondi(affsAnnee.reduce((s, a) => s + Number(a.tjmAchat), 0));
+  const coutMcoAnnee = arrondi(
+    recsNonRegie.reduce((s, r) => {
+      const points = projeterRecurrent(versRecurrentPrevisionnel(r), planningVide, horizonAnnee);
+      return s + totaliserProjection(points).cout;
+    }, 0)
+  );
+  const coutForfaitAnnee = arrondi(decAnnee.reduce((s, d) => s + Number(d.montant), 0));
+  const coutAnnuelTotal = arrondi(coutRegieAnnee + coutMcoAnnee + coutForfaitAnnee);
+  const margePrevAnnee = arrondi(caAnnuelTotal - coutAnnuelTotal);
+  const tauxMargePrevAnnee = caAnnuelTotal > 0 ? margePrevAnnee / caAnnuelTotal : 0;
+
+  const encFenetre = [
+    ...encForfaitsFenetre,
+    ...encDirectsFenetre.flatMap((enc) =>
+      enc.clientId == null
+        ? []
+        : [{ clientId: enc.clientId, date: enc.date, montant: enc.montant }]
+    ),
+  ];
+
   // KPI du mois affiché, avec écart sur le mois précédent.
   const indic = calculerIndicateursMois({
     regie: regieFenetre,
@@ -183,6 +261,10 @@ export default async function PageRentabilite({
     debutMois: debutMoisPrec,
     finMois: finMoisPrec,
   });
+  const caRealiseMois = indic.caTotal;
+  const coutTotal = indic.coutTotal;
+  const margeBrute = indic.margeBrute;
+  const tauxMarge = caRealiseMois > 0 ? margeBrute / caRealiseMois : 0;
 
   return (
     <div className="space-y-6">
@@ -212,6 +294,36 @@ export default async function PageRentabilite({
         </CardContent>
       </Card>
 
+      {/* Coût prévisionnel de l'année — même maille que le CA */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">Coût prévisionnel {annee}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <div className="flex flex-col justify-center rounded-lg border p-4">
+              <p className="text-xs text-muted-foreground">Total {annee}</p>
+              <p className="font-display text-3xl tabular-nums sm:text-4xl">
+                {formatEuro(coutAnnuelTotal)}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3 lg:col-span-2">
+              <LigneCaAnnuel titre="Régie" valeur={coutRegieAnnee} />
+              <LigneCaAnnuel titre="Forfait" valeur={coutForfaitAnnee} />
+              <LigneCaAnnuel titre="Maintenance MCO" valeur={coutMcoAnnee} />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Marge prévisionnelle annuelle + suivi réalisé du mois */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <Indicateur titre={`Marge prévisionnelle ${annee}`} valeur={formatEuro(margePrevAnnee)} />
+        <Indicateur titre="Taux de marge prévisionnel" valeur={formatPourcent(tauxMargePrevAnnee)} />
+        <Indicateur titre="Coût global (mois)" valeur={formatEuro(coutTotal)} />
+        <Indicateur titre="Taux de marge brute (mois)" valeur={formatPourcent(tauxMarge)} />
+      </div>
+
       {/* Écran coupé en deux : to-do (epics) à gauche, KPI clés du mois à droite */}
       <div className="grid gap-4 lg:grid-cols-2">
         <EpicsCard epics={epics} />
@@ -231,8 +343,8 @@ export default async function PageRentabilite({
           />
           <KpiCard
             titre="Marge brute globale"
-            valeur={formatEuro(indic.margeBrute)}
-            diff={indic.margeBrute - indicPrec.margeBrute}
+            valeur={formatEuro(margeBrute)}
+            diff={margeBrute - indicPrec.margeBrute}
             format={formatEuro}
           />
         </div>
@@ -241,12 +353,35 @@ export default async function PageRentabilite({
   );
 }
 
-function LigneCaAnnuel({ titre, valeur }: { titre: string; valeur: number }) {
+function LigneCaAnnuel({
+  titre,
+  valeur,
+  accent = false,
+}: {
+  titre: string;
+  valeur: number;
+  accent?: boolean;
+}) {
   return (
-    <div className="rounded-lg border p-3">
+    <div className={`rounded-lg border p-3 ${accent ? "border-primary/30 bg-primary/5" : ""}`}>
       <p className="text-xs text-muted-foreground">{titre}</p>
-      <p className="font-display text-xl tabular-nums">{formatEuro(valeur)}</p>
+      <p className={`font-display text-xl tabular-nums ${accent ? "text-primary" : ""}`}>
+        {formatEuro(valeur)}
+      </p>
     </div>
+  );
+}
+
+function Indicateur({ titre, valeur }: { titre: string; valeur: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-xs font-normal text-muted-foreground">{titre}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="font-display text-2xl sm:text-3xl">{valeur}</p>
+      </CardContent>
+    </Card>
   );
 }
 

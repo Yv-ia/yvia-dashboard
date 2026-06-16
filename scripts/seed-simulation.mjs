@@ -180,6 +180,25 @@ try {
     }
   }
 
+  // 8) Encaissements DIRECTS (régie / hors forfait) : projet_id NULL, rattachés à
+  //    un client (et, optionnellement, une mission).
+  const idMission = Object.fromEntries(missionsCrees.map((m) => [m.nom, m.id]));
+  const encaissementsDirects = simulation.encaissementsDirects ?? [];
+  for (const e of encaissementsDirects) {
+    await sql`
+      INSERT INTO encaissements (projet_id, client_id, mission_id, date, montant, libelle, statut, fiabilite)
+      VALUES (
+        ${null},
+        ${idClient[e.client]},
+        ${e.mission ? idMission[e.mission] : null},
+        ${e.date},
+        ${e.montant},
+        ${e.libelle},
+        ${e.statut},
+        ${e.fiabilite}
+      )`;
+  }
+
   const recettes = simulation.projets.flatMap((p) => p.recettes);
   const couts = simulation.projets.flatMap((p) => p.couts);
   const jalons = simulation.projets.flatMap((p) => p.jalons);
@@ -201,7 +220,8 @@ try {
   console.log(`    Recettes   : ${recettes.length} (${recRealisees} encaissées, ${recPrevues} prévues)`);
   console.log(`    Coûts      : ${couts.length} (${coutsRealises} décaissés, ${coutsPrevus} prévus)`);
   console.log(`    Jalons     : ${jalons.length}`);
-  console.log("Connecte-toi sur /login puis ouvre /statistiques.");
+  console.log(`  Enc. directs : ${encaissementsDirects.length} (régie / hors forfait)`);
+  console.log("Connecte-toi sur /login puis ouvre /tresorerie.");
 } finally {
   await sql.end();
 }
