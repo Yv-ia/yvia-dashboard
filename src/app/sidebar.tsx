@@ -29,6 +29,7 @@ import {
   UserCircle,
   LogOut,
   Menu,
+  ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -60,19 +61,20 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    titre: "Annuaire",
-    liens: [
-      { href: "/freelances", label: "Freelances", icone: Users },
-      { href: "/clients", label: "Clients", icone: Building2 },
-    ],
-  },
-  {
     titre: "Analyse & Admin",
     liens: [
       { href: "/", label: "Rentabilité", icone: LineChart, match: ["/"] },
       { href: "/statistiques", label: "Cockpit mensuel", icone: BarChart3, exact: true },
       { href: "/statistiques/previsionnel", label: "Prévisionnel 12 mois", icone: TrendingUp },
       { href: "/tresorerie", label: "Trésorerie", icone: Wallet },
+    ],
+  },
+  // Annuaire en bas : référentiels (freelances, clients) + comptes plateforme (Users en dernier).
+  {
+    titre: "Annuaire",
+    liens: [
+      { href: "/freelances", label: "Freelances", icone: Users },
+      { href: "/clients", label: "Clients", icone: Building2 },
       { href: "/users", label: "Users", icone: UserCog },
     ],
   },
@@ -93,36 +95,60 @@ function LiensNavigation({
   pathname: string;
   onNaviguer?: () => void;
 }) {
+  // Sections repliées (repérées par leur titre). Tout est déplié par défaut ;
+  // cliquer sur le titre masque / réaffiche le contenu de la section.
+  const [repliees, setRepliees] = useState<Set<string>>(new Set());
+  const basculer = (titre: string) =>
+    setRepliees((prev) => {
+      const suiv = new Set(prev);
+      if (suiv.has(titre)) suiv.delete(titre);
+      else suiv.add(titre);
+      return suiv;
+    });
+
   return (
     <>
-      {sections.map((section, index) => (
-        <div key={section.titre ?? `section-${index}`} className="flex flex-col gap-1">
-          {section.titre && (
-            <p className="px-3 pb-1 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/70">
-              {section.titre}
-            </p>
-          )}
-          {section.liens.map((lien) => {
-            const actif = estActif(lien, pathname);
-            const Icone = lien.icone;
-            return (
-              <Link
-                key={lien.href}
-                href={lien.href}
-                onClick={onNaviguer}
-                className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
-                  actif
-                    ? "bg-primary font-medium text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                }`}
+      {sections.map((section, index) => {
+        const { titre } = section;
+        const repliee = titre ? repliees.has(titre) : false;
+        return (
+          <div key={titre ?? `section-${index}`} className="flex flex-col gap-1">
+            {titre && (
+              <button
+                type="button"
+                onClick={() => basculer(titre)}
+                aria-expanded={!repliee}
+                className="flex items-center justify-between gap-2 rounded-md px-3 pb-1 pt-3 text-xs font-medium uppercase tracking-wider text-muted-foreground/70 transition-colors hover:text-foreground"
               >
-                <Icone className="size-4 shrink-0" />
-                {lien.label}
-              </Link>
-            );
-          })}
-        </div>
-      ))}
+                <span>{titre}</span>
+                <ChevronDown
+                  className={`size-3.5 shrink-0 transition-transform ${repliee ? "-rotate-90" : ""}`}
+                />
+              </button>
+            )}
+            {!repliee &&
+              section.liens.map((lien) => {
+                const actif = estActif(lien, pathname);
+                const Icone = lien.icone;
+                return (
+                  <Link
+                    key={lien.href}
+                    href={lien.href}
+                    onClick={onNaviguer}
+                    className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                      actif
+                        ? "bg-primary font-medium text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    }`}
+                  >
+                    <Icone className="size-4 shrink-0" />
+                    {lien.label}
+                  </Link>
+                );
+              })}
+          </div>
+        );
+      })}
     </>
   );
 }
