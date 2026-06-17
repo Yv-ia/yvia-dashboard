@@ -43,7 +43,6 @@ export function DividendeCard({
   const cumulMois = serie[idx]?.valeur ?? 0;
   const cumulPrec = idx > 0 ? serie[idx - 1].valeur : 0;
   const ecart = cumulMois - cumulPrec;
-  const maxBarre = Math.max(...serie.map((p) => p.valeur), 1);
 
   async function enregistrer(e: React.FormEvent) {
     e.preventDefault();
@@ -97,39 +96,8 @@ export function DividendeCard({
           </div>
         </div>
 
-        {/* Progression mois par mois du résultat distribuable */}
-        <div>
-          <p className="mb-1 text-center text-[11px] uppercase tracking-wide text-muted-foreground">
-            Progression du résultat distribuable
-          </p>
-          <div className="flex h-20 items-end gap-1">
-            {serie.map((p, i) => (
-              <div
-                key={p.mois}
-                className="flex flex-1 flex-col items-center justify-end"
-                title={`${MOIS_COURT[i]} ${annee} : ${formatEuro(p.valeur)}`}
-              >
-                <div
-                  className={cn("w-full rounded-t-sm", i === idx ? "bg-primary" : "bg-primary/30")}
-                  style={{ height: `${Math.max((Math.max(p.valeur, 0) / maxBarre) * 100, 2)}%` }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-1 flex gap-1">
-            {serie.map((p, i) => (
-              <span
-                key={p.mois}
-                className={cn(
-                  "flex-1 text-center text-[9px]",
-                  i === idx ? "font-medium text-foreground" : "text-muted-foreground"
-                )}
-              >
-                {MOIS_COURT[i][0]}
-              </span>
-            ))}
-          </div>
-        </div>
+        {/* Progression du résultat distribuable cumulé, vers l'objectif de fin d'année */}
+        <CourbeResultat serie={serie} idx={idx} annee={annee} />
 
         <div className="flex justify-center">
           <Button variant="outline" size="sm" onClick={() => setOuvert((o) => !o)}>
@@ -187,6 +155,93 @@ export function DividendeCard({
         ) : null}
       </CardContent>
     </Card>
+  );
+}
+
+// Courbe d'aire de la progression du résultat distribuable cumulé vers l'objectif
+// de fin d'année. SVG (aire + ligne) mis à l'échelle en largeur ; repères (mois
+// courant, libellés) positionnés en HTML pour un alignement exact et net.
+function CourbeResultat({
+  serie,
+  idx,
+  annee,
+}: {
+  serie: PointDividende[];
+  idx: number;
+  annee: number;
+}) {
+  const n = serie.length;
+  const vals = serie.map((p) => Math.max(p.valeur, 0));
+  const max = Math.max(...vals, 1);
+  const objectif = serie[n - 1]?.valeur ?? 0;
+
+  const x = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
+  const y = (v: number) => 100 - (v / max) * 100;
+  const pts = vals.map((v, i) => `${x(i)},${y(v)}`);
+  const ligne = `M ${pts.join(" L ")}`;
+  const aire = `M ${x(0)},100 L ${pts.join(" L ")} L ${x(n - 1)},100 Z`;
+  const courantY = y(vals[idx] ?? 0);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-baseline justify-between text-[11px]">
+        <span className="uppercase tracking-wide text-muted-foreground">
+          Résultat distribuable cumulé
+        </span>
+        <span className="text-muted-foreground">
+          Objectif fin {annee} :{" "}
+          <span className="font-medium tabular-nums text-foreground">{formatEuro(objectif)}</span>
+        </span>
+      </div>
+
+      <div className="relative h-28 text-primary">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          className="absolute inset-0 h-full w-full overflow-visible"
+        >
+          <defs>
+            <linearGradient id="aire-resultat" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <path d={aire} fill="url(#aire-resultat)" />
+          <path
+            d={ligne}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+          />
+        </svg>
+
+        {/* Repère du mois courant : guide vertical + point sur la courbe */}
+        <div className="absolute top-0 h-full w-px bg-primary/25" style={{ left: `${x(idx)}%` }} />
+        <div
+          className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background"
+          style={{ left: `${x(idx)}%`, top: `${courantY}%` }}
+        />
+      </div>
+
+      {/* Axe des mois (alignement exact sur les points) */}
+      <div className="relative mt-1 h-4">
+        {serie.map((p, i) => (
+          <span
+            key={p.mois}
+            className={cn(
+              "absolute -translate-x-1/2 text-[9px]",
+              i === idx ? "font-semibold text-foreground" : "text-muted-foreground"
+            )}
+            style={{ left: `${x(i)}%` }}
+          >
+            {MOIS_COURT[i]}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
