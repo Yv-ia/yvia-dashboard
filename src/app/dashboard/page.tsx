@@ -8,7 +8,6 @@ import { chargerRentabiliteAnnuelle } from "@/lib/rentabilite/charger-rentabilit
 import { lireFraisStructure } from "@/lib/finance/frais-structure";
 import { calculerDividende } from "@/lib/finance/dividende";
 import { formatEuro } from "@/lib/format";
-import { NavigationMois } from "../navigation-mois";
 import { EpicsCard } from "../todo/epics-card";
 import { DividendeCard, type PointDividende } from "./dividende-card";
 import { exigerSession } from "@/lib/auth/server";
@@ -64,10 +63,8 @@ export default async function PageDashboard({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-end">
-        <NavigationMois basePath="/dashboard" annee={annee} mois={mois} />
-      </div>
-
+      {/* Chiffre principal : résultat distribuable + sa progression (le mois courant
+          est visible dans l'encart, donc pas de sélecteur de mois ici). */}
       <DividendeCard
         annee={annee}
         moisSelectionne={mois}
@@ -76,8 +73,8 @@ export default async function PageDashboard({
         fraisStructure={fraisStructure}
       />
 
-      {/* Écran coupé en deux : to-do (epics) à gauche, KPI clés du mois à droite */}
-      <div className="grid gap-4 lg:grid-cols-2">
+      {/* Bloc opérationnel, nettement séparé : to-do (epics) à gauche, KPI du mois à droite */}
+      <div className="grid gap-4 border-t pt-8 lg:grid-cols-2">
         <EpicsCard epics={epics} />
 
         <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
