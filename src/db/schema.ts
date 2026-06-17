@@ -250,3 +250,12 @@ export const decaissements = pgTable("decaissements", {
   libelle: text("libelle"), // optionnel
   statut: text("statut").notNull().default("decaisse"), // 'decaisse' | 'prevu'
 });
+
+// --- PARAMÈTRES (réglages chiffrés de pilotage, clé/valeur) ---
+// Stocke des valeurs de configuration saisies à la main, ex. les frais de
+// structure annuels (assurance RC, abonnements...) utilisés pour passer de la
+// marge brute au résultat avant IS. Clé conventionnelle : "frais_structure:<annee>".
+export const parametres = pgTable("parametres", {
+  cle: text("cle").primaryKey(),
+  valeur: numeric("valeur", { precision: 12, scale: 2 }).notNull(),
+});

@@ -4,9 +4,13 @@ import { asc, eq } from "drizzle-orm";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { chargerIndicateursMois } from "@/lib/rentabilite/charger-indicateurs-mois";
+import { chargerRentabiliteAnnuelle } from "@/lib/rentabilite/charger-rentabilite-annuelle";
+import { lireFraisStructure } from "@/lib/finance/frais-structure";
+import { calculerDividende } from "@/lib/finance/dividende";
 import { formatEuro } from "@/lib/format";
 import { NavigationMois } from "../navigation-mois";
 import { EpicsCard } from "../todo/epics-card";
+import { DividendeCard, type PointDividende } from "./dividende-card";
 import { exigerSession } from "@/lib/auth/server";
 
 export default async function PageDashboard({
@@ -22,8 +26,10 @@ export default async function PageDashboard({
   const moisParam = Number(params.mois);
   const mois = moisParam >= 1 && moisParam <= 12 ? moisParam : maintenant.getUTCMonth() + 1;
 
-  const [{ indic, indicPrec }, epics] = await Promise.all([
+  const [{ indic, indicPrec }, rent, fraisStructure, epics] = await Promise.all([
     chargerIndicateursMois(annee, mois),
+    chargerRentabiliteAnnuelle(annee),
+    lireFraisStructure(annee),
     // Epics (grosses to-do) pour le bloc de gauche.
     db
       .select({
@@ -39,11 +45,36 @@ export default async function PageDashboard({
 
   const margeBrute = indic.margeBrute;
 
+  // Chiffre principal : dividende remontable projeté en fin d'année + sa trajectoire
+  // cumulée mois par mois (marge cumulée − frais de structure au prorata des mois).
+  const detailDividende = calculerDividende({
+    margeBrute: rent.margePrevAnnee,
+    fraisStructure,
+  });
+  const serieDividende: PointDividende[] = rent.margeParMois.map((m, i) => {
+    const margeCumul = rent.margeParMois
+      .slice(0, i + 1)
+      .reduce((s, x) => s + x.marge, 0);
+    const d = calculerDividende({
+      margeBrute: margeCumul,
+      fraisStructure: (fraisStructure * (i + 1)) / 12,
+    });
+    return { mois: m.mois, valeur: d.resultatApresIS };
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-end">
         <NavigationMois basePath="/dashboard" annee={annee} mois={mois} />
       </div>
+
+      <DividendeCard
+        annee={annee}
+        moisSelectionne={mois}
+        detail={detailDividende}
+        serie={serieDividende}
+        fraisStructure={fraisStructure}
+      />
 
       {/* Écran coupé en deux : to-do (epics) à gauche, KPI clés du mois à droite */}
       <div className="grid gap-4 lg:grid-cols-2">
