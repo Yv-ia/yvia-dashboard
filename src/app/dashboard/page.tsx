@@ -2,6 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { chargerIndicateursMois } from "@/lib/rentabilite/charger-indicateurs-mois";
 import { chargerRentabiliteAnnuelle } from "@/lib/rentabilite/charger-rentabilite-annuelle";
 import { lireFraisStructure } from "@/lib/finance/frais-structure";
+import { lireObjectifResultat } from "@/lib/finance/objectif";
 import { formatEuro } from "@/lib/format";
 import { DividendeCard } from "./dividende-card";
 import { exigerSession } from "@/lib/auth/server";
@@ -19,10 +20,11 @@ export default async function PageDashboard({
   const moisParam = Number(params.mois);
   const mois = moisParam >= 1 && moisParam <= 12 ? moisParam : maintenant.getUTCMonth() + 1;
 
-  const [{ indic }, rent, fraisStructure] = await Promise.all([
+  const [{ indic }, rent, fraisStructure, objectif] = await Promise.all([
     chargerIndicateursMois(annee, mois),
     chargerRentabiliteAnnuelle(annee),
     lireFraisStructure(annee),
+    lireObjectifResultat(annee),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function PageDashboard({
         margePrevAnnee={rent.margePrevAnnee}
         margeMensuelle={rent.margeParMois.map((m) => ({ mois: m.mois, marge: m.marge }))}
         fraisStructureInitial={fraisStructure}
+        objectif={objectif}
       />
 
       {/* 3 KPI en ligne, en valeur absolue, sous le graphe de rentabilité. */}
