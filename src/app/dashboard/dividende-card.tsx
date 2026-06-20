@@ -1,59 +1,77 @@
 "use client";
-// KPI principal du Dashboard : le résultat distribuable projeté en fin d'année.
-// Deux gros chiffres centrés — Résultat avant impôts et Résultat net post-IS (à
-// distribuer) — + la progression mois par mois du résultat distribuable. Le détail
-// du calcul (marge → frais → IS 15 %/25 % → mère-fille) est masqué par défaut,
-// révélé au clic ; c'est aussi là qu'on saisit les frais de structure.
+// KPI principal du Dashboard : le résultat distribuable (post-IS). Mise en page en
+// deux colonnes : à gauche le chiffre (cumul à fin du mois choisi) + un curseur de
+// navigation mois par mois ; à droite la courbe de progression (sans superposition).
+// Le détail du calcul (résultat avant impôts, IS 15 %/25 %, mère-fille) et la saisie
+// des frais de structure sont dans le panneau « Détail ».
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatEuro } from "@/lib/format";
-import type { DetailDividende } from "@/lib/finance/dividende";
+import { formatEuro, formatMois } from "@/lib/format";
+import { calculerDividende } from "@/lib/finance/dividende";
 import { definirFraisStructure } from "./actions";
 
 const MOIS_COURT = ["Jan", "Fév", "Mar", "Avr", "Mai", "Jun", "Jul", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
-// Point de la progression : résultat distribuable (post-IS) cumulé à ce mois.
-export type PointDividende = { mois: string; valeur: number };
+export type MargeMois = { mois: string; marge: number };
 
 export function DividendeCard({
   annee,
   moisSelectionne,
-  detail,
-  serie,
-  fraisStructure,
+  margePrevAnnee,
+  margeMensuelle,
+  fraisStructureInitial,
+  objectif,
 }: {
   annee: number;
-  moisSelectionne: number; // 1..12, pour situer « où on en est »
-  detail: DetailDividende; // projection PLEINE année
-  serie: PointDividende[]; // 12 points : progression du résultat distribuable
-  fraisStructure: number;
+  moisSelectionne: number; // 1..12 (mois courant par défaut)
+  margePrevAnnee: number;
+  margeMensuelle: MargeMois[];
+  fraisStructureInitial: number;
+  objectif: number; // objectif de résultat à distribuer (fin d'année)
 }) {
   const router = useRouter();
+  const [moisSel, setMoisSel] = useState(Math.min(Math.max(moisSelectionne, 1), 12));
+  const [frais, setFrais] = useState(fraisStructureInitial);
   const [ouvert, setOuvert] = useState(false);
-  const [montant, setMontant] = useState(String(fraisStructure));
   const [enCours, setEnCours] = useState(false);
 
-  const idx = Math.min(Math.max(moisSelectionne - 1, 0), serie.length - 1);
+  const detail = useMemo(
+    () => calculerDividende({ margeBrute: margePrevAnnee, fraisStructure: frais }),
+    [margePrevAnnee, frais]
+  );
+  const serie = useMemo(
+    () =>
+      margeMensuelle.map((m, i) => {
+        const margeCumul = margeMensuelle.slice(0, i + 1).reduce((s, x) => s + x.marge, 0);
+        const d = calculerDividende({
+          margeBrute: margeCumul,
+          fraisStructure: (frais * (i + 1)) / 12,
+        });
+        return { mois: m.mois, valeur: d.resultatApresIS };
+      }),
+    [margeMensuelle, frais]
+  );
+
+  const idx = Math.min(Math.max(moisSel - 1, 0), serie.length - 1);
   const cumulMois = serie[idx]?.valeur ?? 0;
-  const cumulPrec = idx > 0 ? serie[idx - 1].valeur : 0;
-  const ecart = cumulMois - cumulPrec;
+  const modifie = frais !== fraisStructureInitial;
 
   async function enregistrer(e: React.FormEvent) {
     e.preventDefault();
     setEnCours(true);
     const fd = new FormData();
     fd.set("annee", String(annee));
-    fd.set("montant", montant);
+    fd.set("montant", String(frais));
     const res = await definirFraisStructure(fd);
     setEnCours(false);
     if (res.ok) {
-      toast.success("Frais de structure mis à jour.");
+      toast.success("Frais de structure enregistrés.");
       router.refresh();
     } else {
       toast.error(res.message ?? "Échec de l'enregistrement.");
@@ -62,42 +80,70 @@ export function DividendeCard({
 
   return (
     <Card className="border-primary/30 bg-primary/5">
-      <CardHeader className="pb-2 text-center">
+      <CardHeader className="pb-2">
         <CardTitle className="text-sm font-medium text-muted-foreground">
-          Résultat à distribuer — projection fin {annee}
+          Résultat à distribuer — {annee}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Deux gros KPI centrés */}
-        <div className="grid items-end gap-6 sm:grid-cols-2">
-          <div className="text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Résultat avant impôts
-            </p>
-            <p className="font-display text-3xl tabular-nums sm:text-4xl">
-              {formatEuro(detail.resultatAvantIS)}
-            </p>
-          </div>
-          <div className="text-center">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Résultat net post-IS — à distribuer
-            </p>
-            <p className="font-display text-4xl tabular-nums text-primary sm:text-5xl">
-              {formatEuro(detail.resultatApresIS)}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Cumulé à fin {MOIS_COURT[idx]} : {formatEuro(cumulMois)} ·{" "}
-              <span className={ecart >= 0 ? "text-emerald-600" : "text-rose-600"}>
-                {ecart >= 0 ? "+" : "−"}
-                {formatEuro(Math.abs(ecart))}
-              </span>{" "}
-              vs mois précédent
-            </p>
-          </div>
-        </div>
+      <CardContent className="space-y-5">
+        <div className="grid gap-6 lg:grid-cols-[260px_1fr] lg:items-center">
+          {/* Colonne gauche : chiffre + navigation mois */}
+          <div className="space-y-4 text-center lg:text-left">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                À fin {MOIS_COURT[idx]} {annee}
+              </p>
+              <p className="font-display text-4xl tabular-nums text-primary sm:text-5xl">
+                {formatEuro(cumulMois)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Objectif fin {annee} :{" "}
+                <span className="font-medium tabular-nums text-foreground">
+                  {formatEuro(objectif)}
+                </span>
+              </p>
+            </div>
 
-        {/* Progression du résultat distribuable cumulé, vers l'objectif de fin d'année */}
-        <CourbeResultat serie={serie} idx={idx} annee={annee} />
+            <div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setMoisSel((m) => Math.max(1, m - 1))}
+                  disabled={moisSel <= 1}
+                  aria-label="Mois précédent"
+                >
+                  <ChevronLeft />
+                </Button>
+                <input
+                  type="range"
+                  min={1}
+                  max={12}
+                  step={1}
+                  value={moisSel}
+                  onChange={(e) => setMoisSel(Number(e.target.value))}
+                  className="flex-1 accent-primary"
+                  aria-label="Mois"
+                />
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setMoisSel((m) => Math.min(12, m + 1))}
+                  disabled={moisSel >= 12}
+                  aria-label="Mois suivant"
+                >
+                  <ChevronRight />
+                </Button>
+              </div>
+              <p className="mt-1 text-center text-xs font-medium capitalize text-muted-foreground">
+                {formatMois(annee, moisSel)}
+              </p>
+            </div>
+          </div>
+
+          {/* Colonne droite : courbe de progression */}
+          <GrapheResultat serie={serie} idx={idx} objectif={objectif} />
+        </div>
 
         <div className="flex justify-center">
           <Button variant="outline" size="sm" onClick={() => setOuvert((o) => !o)}>
@@ -106,16 +152,12 @@ export function DividendeCard({
           </Button>
         </div>
 
-        {/* Détail du calcul (masqué par défaut) */}
         {ouvert ? (
           <div className="mx-auto max-w-xl space-y-1 rounded-lg border bg-background p-3 text-sm">
             <Ligne label="Marge brute dégagée" valeur={detail.margeBrute} />
             <Ligne label="Frais de structure" valeur={-detail.fraisStructure} />
             <Ligne label="= Résultat avant impôts" valeur={detail.resultatAvantIS} fort sep />
-            <Ligne
-              label="IS à 15 % (jusqu'à 42 500 €)"
-              valeur={-detail.isSocietePartReduite}
-            />
+            <Ligne label="IS à 15 % (jusqu'à 42 500 €)" valeur={-detail.isSocietePartReduite} />
             <Ligne label="IS à 25 % (au-delà de 42 500 €)" valeur={-detail.isSocietePartNormale} />
             <Ligne
               label="= Résultat net post-IS (à distribuer)"
@@ -125,7 +167,7 @@ export function DividendeCard({
               accent
             />
             <Ligne
-              label={`Si remontée en holding — régime mère-fille (quote-part 5 % imposée = ${formatEuro(
+              label={`Si remontée en holding — mère-fille (quote-part 5 % imposée = ${formatEuro(
                 detail.quotePartMereFille
               )}) → dividende net : ${formatEuro(detail.dividendeNet)}`}
               valeur={-detail.isHolding}
@@ -141,13 +183,12 @@ export function DividendeCard({
                   type="number"
                   min={0}
                   step={100}
-                  value={montant}
-                  onChange={(e) => setMontant(e.target.value)}
+                  value={frais}
+                  onChange={(e) => setFrais(Math.max(0, Number(e.target.value) || 0))}
                   className="h-9 rounded-md border bg-background px-3 text-sm tabular-nums outline-none focus:ring-2 focus:ring-primary/40"
                 />
               </label>
-              <Button type="submit" size="sm" disabled={enCours}>
-                <Pencil className="size-3.5" />
+              <Button type="submit" size="sm" disabled={enCours || !modifie}>
                 {enCours ? "..." : "Enregistrer"}
               </Button>
             </form>
@@ -158,51 +199,39 @@ export function DividendeCard({
   );
 }
 
-// Courbe d'aire de la progression du résultat distribuable cumulé vers l'objectif
-// de fin d'année. SVG (aire + ligne) mis à l'échelle en largeur ; repères (mois
-// courant, libellés) positionnés en HTML pour un alignement exact et net.
-function CourbeResultat({
+// Courbe d'aire de la progression du résultat distribuable cumulé, avec le repère du
+// mois sélectionné (guide + point). Pas de chiffre superposé : il est dans la colonne.
+function GrapheResultat({
   serie,
   idx,
-  annee,
+  objectif,
 }: {
-  serie: PointDividende[];
+  serie: { mois: string; valeur: number }[];
   idx: number;
-  annee: number;
+  objectif: number;
 }) {
   const n = serie.length;
   const vals = serie.map((p) => Math.max(p.valeur, 0));
-  const max = Math.max(...vals, 1);
-  const objectif = serie[n - 1]?.valeur ?? 0;
-
+  // L'échelle inclut l'objectif pour que sa ligne tienne dans le graphe.
+  const max = Math.max(...vals, objectif, 1);
   const x = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
   const y = (v: number) => 100 - (v / max) * 100;
   const pts = vals.map((v, i) => `${x(i)},${y(v)}`);
   const ligne = `M ${pts.join(" L ")}`;
   const aire = `M ${x(0)},100 L ${pts.join(" L ")} L ${x(n - 1)},100 Z`;
-  const courantY = y(vals[idx] ?? 0);
+  const yObjectif = y(objectif);
 
   return (
     <div>
-      <div className="mb-2 flex items-baseline justify-between text-[11px]">
-        <span className="uppercase tracking-wide text-muted-foreground">
-          Résultat distribuable cumulé
-        </span>
-        <span className="text-muted-foreground">
-          Objectif fin {annee} :{" "}
-          <span className="font-medium tabular-nums text-foreground">{formatEuro(objectif)}</span>
-        </span>
-      </div>
-
-      <div className="relative h-28 text-primary">
+      <div className="relative h-44 text-primary">
         <svg
           viewBox="0 0 100 100"
           preserveAspectRatio="none"
-          className="absolute inset-0 h-full w-full overflow-visible"
+          className="absolute inset-0 h-full w-full"
         >
           <defs>
             <linearGradient id="aire-resultat" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.2" />
               <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
             </linearGradient>
           </defs>
@@ -216,18 +245,38 @@ function CourbeResultat({
             strokeLinejoin="round"
             strokeLinecap="round"
           />
+          {/* Ligne d'objectif (pointillés) */}
+          <line
+            x1="0"
+            x2="100"
+            y1={yObjectif}
+            y2={yObjectif}
+            stroke="currentColor"
+            strokeOpacity={0.5}
+            strokeWidth={1}
+            strokeDasharray="3 2"
+            vectorEffect="non-scaling-stroke"
+          />
         </svg>
 
-        {/* Repère du mois courant : guide vertical + point sur la courbe */}
+        {/* Étiquette de l'objectif */}
+        <div
+          className="absolute right-0 -translate-y-1/2 rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary"
+          style={{ top: `${yObjectif}%` }}
+        >
+          Objectif {formatEuro(objectif)}
+        </div>
+
+        {/* Repère du mois sélectionné */}
         <div className="absolute top-0 h-full w-px bg-primary/25" style={{ left: `${x(idx)}%` }} />
         <div
-          className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background"
-          style={{ left: `${x(idx)}%`, top: `${courantY}%` }}
+          className="absolute size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-background shadow-sm"
+          style={{ left: `${x(idx)}%`, top: `${y(vals[idx] ?? 0)}%` }}
         />
       </div>
 
       {/* Axe des mois (alignement exact sur les points) */}
-      <div className="relative mt-1 h-4">
+      <div className="relative mt-2 h-4">
         {serie.map((p, i) => (
           <span
             key={p.mois}
