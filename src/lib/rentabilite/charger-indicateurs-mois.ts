@@ -10,15 +10,22 @@ import { calculerIndicateursMois, type IndicateursMois } from "./indicateurs";
 export async function chargerIndicateursMois(
   annee: number,
   mois: number
-): Promise<{ indic: IndicateursMois; indicPrec: IndicateursMois }> {
+): Promise<{
+  indic: IndicateursMois;
+  indicPrec: IndicateursMois;
+  clientsActifsAnnee: number;
+}> {
   const debutMois = premierJourDuMois(annee, mois);
   const finMois = dernierJourDuMois(annee, mois);
   const moisPrec = mois === 1 ? 12 : mois - 1;
   const anneePrec = mois === 1 ? annee - 1 : annee;
   const debutMoisPrec = premierJourDuMois(anneePrec, moisPrec);
   const finMoisPrec = dernierJourDuMois(anneePrec, moisPrec);
+  const debutAnnee = `${annee}-01-01`;
+  const finAnnee = `${annee}-12-31`;
 
-  const [regieFenetre, encForfaitsFenetre, encDirectsFenetre, decFenetre] = await Promise.all([
+  const [regieFenetre, encForfaitsFenetre, encDirectsFenetre, decFenetre, clientsAnnee] =
+    await Promise.all([
     // Régie réelle : jours posés (CA = TJM vente, coût = TJM achat), par client.
     db
       .select({
@@ -82,6 +89,38 @@ export async function chargerIndicateursMois(
           lte(decaissements.date, finMois)
         )
       ),
+    // Pour le KPI annuel « Clients actifs » : tout client ayant généré du CA dans
+    // l'année (régie posée OU encaissement réalisé, forfait ou direct). On ramène
+    // juste les `clientId` distincts ; le dédoublonnage se fait en mémoire.
+    Promise.all([
+      db
+        .select({ clientId: missions.clientId })
+        .from(affectations)
+        .innerJoin(missions, eq(affectations.missionId, missions.id))
+        .where(and(gte(affectations.date, debutAnnee), lte(affectations.date, finAnnee))),
+      db
+        .select({ clientId: projets.clientId })
+        .from(encaissements)
+        .innerJoin(projets, eq(encaissements.projetId, projets.id))
+        .where(
+          and(
+            eq(encaissements.statut, "encaisse"),
+            gte(encaissements.date, debutAnnee),
+            lte(encaissements.date, finAnnee)
+          )
+        ),
+      db
+        .select({ clientId: encaissements.clientId })
+        .from(encaissements)
+        .where(
+          and(
+            eq(encaissements.statut, "encaisse"),
+            isNull(encaissements.projetId),
+            gte(encaissements.date, debutAnnee),
+            lte(encaissements.date, finAnnee)
+          )
+        ),
+    ]),
   ]);
 
   const encFenetre = [
@@ -108,5 +147,15 @@ export async function chargerIndicateursMois(
     finMois: finMoisPrec,
   });
 
-  return { indic, indicPrec };
+  // Dédoublonnage des clients actifs sur l'année (régie OU encaissement, dans
+  // l'année courante) — un client qui n'a que des coûts ne compte pas, comme la
+  // règle mensuelle (cf. §7.12 du PRD).
+  const [regieAnnee, encForfaitAnnee, encDirectAnnee] = clientsAnnee;
+  const ids = new Set<number>();
+  for (const r of regieAnnee) if (r.clientId != null) ids.add(r.clientId);
+  for (const e of encForfaitAnnee) if (e.clientId != null) ids.add(e.clientId);
+  for (const e of encDirectAnnee) if (e.clientId != null) ids.add(e.clientId);
+  const clientsActifsAnnee = ids.size;
+
+  return { indic, indicPrec, clientsActifsAnnee };
 }
