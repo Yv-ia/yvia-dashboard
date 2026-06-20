@@ -23,14 +23,12 @@ export type MargeMois = { mois: string; marge: number };
 export function DividendeCard({
   annee,
   moisSelectionne,
-  margePrevAnnee,
   margeMensuelle,
   fraisStructureInitial,
   objectif,
 }: {
   annee: number;
   moisSelectionne: number; // 1..12 (mois courant par défaut)
-  margePrevAnnee: number;
   margeMensuelle: MargeMois[];
   fraisStructureInitial: number;
   objectif: number; // objectif de résultat à distribuer (fin d'année)
@@ -41,25 +39,26 @@ export function DividendeCard({
   const [ouvert, setOuvert] = useState(false);
   const [enCours, setEnCours] = useState(false);
 
-  const detail = useMemo(
-    () => calculerDividende({ margeBrute: margePrevAnnee, fraisStructure: frais }),
-    [margePrevAnnee, frais]
-  );
-  const serie = useMemo(
+  // Marge brute cumulée + détail dividende pour CHAQUE mois (l'index i = mois i+1).
+  // Le détail à fin du mois sélectionné suit le curseur (frais proratisés au mois).
+  const parMois = useMemo(
     () =>
       margeMensuelle.map((m, i) => {
         const margeCumul = margeMensuelle.slice(0, i + 1).reduce((s, x) => s + x.marge, 0);
-        const d = calculerDividende({
-          margeBrute: margeCumul,
-          fraisStructure: (frais * (i + 1)) / 12,
-        });
-        return { mois: m.mois, valeur: d.resultatApresIS };
+        const fraisProrata = (frais * (i + 1)) / 12;
+        const detail = calculerDividende({ margeBrute: margeCumul, fraisStructure: fraisProrata });
+        return { mois: m.mois, margeCumul, fraisProrata, detail };
       }),
     [margeMensuelle, frais]
   );
 
-  const idx = Math.min(Math.max(moisSel - 1, 0), serie.length - 1);
-  const cumulMois = serie[idx]?.valeur ?? 0;
+  const idx = Math.min(Math.max(moisSel - 1, 0), parMois.length - 1);
+  const detailMois = parMois[idx]?.detail ?? calculerDividende({ margeBrute: 0, fraisStructure: 0 });
+  const cumulMois = detailMois.resultatApresIS;
+  const serie = useMemo(
+    () => parMois.map((p) => ({ mois: p.mois, valeur: p.detail.resultatApresIS })),
+    [parMois]
+  );
   const modifie = frais !== fraisStructureInitial;
 
   async function enregistrer(e: React.FormEvent) {
@@ -154,23 +153,32 @@ export function DividendeCard({
 
         {ouvert ? (
           <div className="mx-auto max-w-xl space-y-1 rounded-lg border bg-background p-3 text-sm">
-            <Ligne label="Marge brute dégagée" valeur={detail.margeBrute} />
-            <Ligne label="Frais de structure" valeur={-detail.fraisStructure} />
-            <Ligne label="= Résultat avant impôts" valeur={detail.resultatAvantIS} fort sep />
-            <Ligne label="IS à 15 % (jusqu'à 42 500 €)" valeur={-detail.isSocietePartReduite} />
-            <Ligne label="IS à 25 % (au-delà de 42 500 €)" valeur={-detail.isSocietePartNormale} />
+            <p className="mb-2 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Cumulé à fin {MOIS_COURT[idx]} {annee}
+            </p>
+            <Ligne label="Marge brute cumulée" valeur={detailMois.margeBrute} />
+            <Ligne
+              label={`Frais de structure (prorata ${idx + 1}/12)`}
+              valeur={-detailMois.fraisStructure}
+            />
+            <Ligne label="= Résultat avant impôts" valeur={detailMois.resultatAvantIS} fort sep />
+            <Ligne label="IS à 15 % (jusqu'à 42 500 €)" valeur={-detailMois.isSocietePartReduite} />
+            <Ligne
+              label="IS à 25 % (au-delà de 42 500 €)"
+              valeur={-detailMois.isSocietePartNormale}
+            />
             <Ligne
               label="= Résultat net post-IS (à distribuer)"
-              valeur={detail.resultatApresIS}
+              valeur={detailMois.resultatApresIS}
               fort
               sep
               accent
             />
             <Ligne
               label={`Si remontée en holding — mère-fille (quote-part 5 % imposée = ${formatEuro(
-                detail.quotePartMereFille
-              )}) → dividende net : ${formatEuro(detail.dividendeNet)}`}
-              valeur={-detail.isHolding}
+                detailMois.quotePartMereFille
+              )}) → dividende net : ${formatEuro(detailMois.dividendeNet)}`}
+              valeur={-detailMois.isHolding}
               discret
             />
 
