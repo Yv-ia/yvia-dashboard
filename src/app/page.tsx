@@ -1,7 +1,12 @@
+import { asc } from "drizzle-orm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { db } from "@/db";
+import { todos } from "@/db/schema";
 import { chargerRentabiliteAnnuelle } from "@/lib/rentabilite/charger-rentabilite-annuelle";
 import { formatEuro, formatPourcent } from "@/lib/format";
+import { lireColonnesKanban } from "@/lib/todos/colonnes";
 import { NavigationMois } from "./navigation-mois";
+import { DomainesCard } from "./todo/domaines-card";
 import { exigerSession } from "@/lib/auth/server";
 
 export default async function PageRentabilite({
@@ -18,6 +23,23 @@ export default async function PageRentabilite({
   const mois = moisParam >= 1 && moisParam <= 12 ? moisParam : maintenant.getUTCMonth() + 1;
 
   const r = await chargerRentabiliteAnnuelle(annee);
+
+  // To-do remontées sur le dashboard : la carte regroupe les macro-tâches
+  // ouvertes par domaine (tri par ordre = priorité) et calcule la progression
+  // des sous-tâches. On charge tout (sous-tâches incluses) pour cette synthèse.
+  const todosListe = await db
+    .select({
+      id: todos.id,
+      titre: todos.titre,
+      statut: todos.statut,
+      domaine: todos.domaine,
+      owner: todos.owner,
+      parentId: todos.parentId,
+    })
+    .from(todos)
+    .orderBy(asc(todos.ordre), asc(todos.id));
+
+  const colonnesTodo = await lireColonnesKanban();
 
   return (
     <div className="space-y-6">
@@ -77,6 +99,9 @@ export default async function PageRentabilite({
           valeur={formatPourcent(r.tauxMargePrevAnnee)}
         />
       </div>
+
+      {/* To-do de pilotage ouvertes, regroupées par domaine */}
+      <DomainesCard todos={todosListe} colonnes={colonnesTodo} />
     </div>
   );
 }

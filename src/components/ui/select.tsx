@@ -21,6 +21,7 @@ function Select({
   className,
   onValueChange,
   triggerLabel,
+  "aria-label": ariaLabel,
 }: {
   options: readonly SelectOption[];
   placeholder?: string;
@@ -32,6 +33,7 @@ function Select({
   disabled?: boolean;
   className?: string;
   onValueChange?: (value: string) => void;
+  "aria-label"?: string;
   // Si défini, le déclencheur affiche toujours ce texte (au lieu de la valeur
   // sélectionnée). Utile pour un bouton « Regrouper par » fixe.
   triggerLabel?: string;
@@ -53,6 +55,7 @@ function Select({
     >
       <SelectPrimitive.Trigger
         id={id}
+        aria-label={ariaLabel}
         className={cn(
           "flex h-9 w-full items-center justify-between gap-2 rounded-xl border border-transparent bg-secondary px-3 py-1 text-sm outline-none transition-colors select-none hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 data-disabled:pointer-events-none data-disabled:opacity-50",
           className

@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { Sidebar } from "./sidebar";
 import { DrawerProvider } from "./_drawer/drawer-stack";
 import { EnregistrementServiceWorker } from "@/components/enregistrement-service-worker";
+import { cookies } from "next/headers";
 import { getSession } from "@/lib/auth/server";
 
 export const metadata: Metadata = {
@@ -37,6 +38,8 @@ export default async function RootLayout({
   // En-tête (logo + navigation + déconnexion) affiché uniquement si connecté.
   const session = await getSession();
   const nomAffiche = [session?.prenom, session?.nom].filter(Boolean).join(" ") || session?.email || "";
+  // Préférence « menu réduit » mémorisée dans un cookie (persiste au reload).
+  const sidebarReduit = (await cookies()).get("sidebar-reduit")?.value === "1";
 
   return (
     <html lang="fr" className="h-full">
@@ -45,7 +48,11 @@ export default async function RootLayout({
           <DrawerProvider>
             {/* Colonne sur mobile (barre en haut), ligne sur desktop (sidebar à gauche). */}
             <div className="flex min-h-screen flex-col lg:flex-row">
-              <Sidebar nomAffiche={nomAffiche} role={session.role} />
+              <Sidebar
+                nomAffiche={nomAffiche}
+                role={session.role}
+                reduitInitial={sidebarReduit}
+              />
               <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
                 {children}
               </main>

@@ -85,6 +85,20 @@
       "when": 1781685523650,
       "tag": "0011_parametres",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782565629126,
+      "tag": "0012_todo_drop_epic",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1782565641563,
+      "tag": "0013_todo_kanban_domaine_owner",
+      "breakpoints": true
     }
   ]
 }

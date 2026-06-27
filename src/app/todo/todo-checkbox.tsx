@@ -1,6 +1,6 @@
 "use client";
 // Case à cocher d'une to-do : bascule fait ↔ à faire (basculerTodo). Partagée
-// par la liste /todo et le bloc « epics » du dashboard.
+// par la liste /todo et le bloc « To-do par domaine » du dashboard.
 
 import { useTransition } from "react";
 import { Check } from "lucide-react";

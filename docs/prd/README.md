@@ -27,6 +27,7 @@
 | 10 | Succès & mesure | [10-succes-mesure.md](10-succes-mesure.md) |
 | 11 | Roadmap & phasage | [11-roadmap-phasage.md](11-roadmap-phasage.md) |
 | 12 | Annexes | [12-annexes.md](12-annexes.md) |
+| 13 | Exécution & file d'actions (To-Do Yvia) | [13-todo-execution.md](13-todo-execution.md) |
 
 ## Ordre de rédaction
 
