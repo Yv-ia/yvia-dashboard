@@ -30,8 +30,11 @@ import {
   LogOut,
   Menu,
   ChevronDown,
+  PanelLeftClose,
+  PanelLeftOpen,
   type LucideIcon,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
 import { deconnexion } from "@/app/login/actions";
 import type { Role } from "@/lib/auth/session";
@@ -153,9 +156,27 @@ function LiensNavigation({
   );
 }
 
-export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }) {
+export function Sidebar({
+  nomAffiche,
+  role,
+  reduitInitial = false,
+}: {
+  nomAffiche: string;
+  role: Role;
+  reduitInitial?: boolean;
+}) {
   const pathname = usePathname();
   const [menuOuvert, setMenuOuvert] = useState(false);
+  // Réduction de la sidebar desktop (libère ~240px, ex. pour voir 4 colonnes du
+  // Kanban sur un écran 13"). Préférence mémorisée dans un cookie (initialisée
+  // côté serveur via reduitInitial, donc persistante au reload).
+  const [reduit, setReduit] = useState(reduitInitial);
+  const basculerReduit = () =>
+    setReduit((r) => {
+      const suivant = !r;
+      document.cookie = `sidebar-reduit=${suivant ? "1" : "0"}; path=/; max-age=31536000; samesite=lax`;
+      return suivant;
+    });
   // On n'affiche que les liens autorisés par le rôle : Users réservé à l'admin,
   // et le commercial est restreint à ses pages (cf. peutAccederRoute).
   const sections = SECTIONS.map((section) => ({
@@ -179,8 +200,13 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
   return (
     <>
       {/* --- Sidebar desktop --- */}
-      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-background lg:flex">
-        <div className="px-5 py-5">
+      <aside
+        className={cn(
+          "sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r bg-background lg:flex",
+          reduit && "lg:hidden"
+        )}
+      >
+        <div className="flex items-center justify-between px-5 py-5">
           <Link href="/" className="flex items-center">
             <Image
               src="/logo-yvia.svg"
@@ -191,6 +217,15 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
               priority
             />
           </Link>
+          <button
+            type="button"
+            onClick={basculerReduit}
+            aria-label="Masquer le menu"
+            title="Masquer le menu"
+            className="-mr-2 flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <PanelLeftClose className="size-4" />
+          </button>
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 px-3">
@@ -227,6 +262,19 @@ export function Sidebar({ nomAffiche, role }: { nomAffiche: string; role: Role }
           </div>
         </div>
       </aside>
+
+      {/* Bouton flottant pour réafficher le menu (desktop, quand il est masqué). */}
+      {reduit ? (
+        <button
+          type="button"
+          onClick={basculerReduit}
+          aria-label="Afficher le menu"
+          title="Afficher le menu"
+          className="fixed left-2 top-3 z-40 hidden size-9 items-center justify-center rounded-md border bg-background text-muted-foreground shadow-sm transition-colors hover:bg-muted hover:text-foreground lg:flex"
+        >
+          <PanelLeftOpen className="size-4" />
+        </button>
+      ) : null}
 
       {/* --- Barre supérieure mobile / tablette --- */}
       <header className="sticky top-0 z-40 flex h-14 shrink-0 items-center gap-2 border-b bg-background px-4 lg:hidden">

@@ -10,6 +10,7 @@ import {
   date,
   numeric,
   unique,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 // --- UTILISATEURS (les 3 associés qui se connectent à l'app) ---
@@ -223,15 +224,21 @@ export const recurrents = pgTable("recurrents", {
 
 // --- TO-DO (chantiers de pilotage) ---
 // Liste d'actions de pilotage, indépendante du métier (clients, missions…).
-// Les « epics » (grosses to-do) remontent sur le dashboard Rentabilité ; la page
-// /todo gère l'ensemble. `ordre` permet un tri manuel stable.
+// Chaque to-do se range dans un « domaine » (strategie · sales · delivery ·
+// finance_admin) qui forme les colonnes du Kanban /todo ; le dashboard
+// Rentabilité regroupe les actions ouvertes par domaine. `ordre` = priorité
+// intra-colonne. `owner` = responsable de la tâche (texte libre).
 export const todos = pgTable("todos", {
   id: serial("id").primaryKey(),
   titre: text("titre").notNull(),
-  description: text("description"), // détail optionnel
+  description: text("description"), // notes / détail optionnel
   statut: text("statut").notNull().default("a_faire"), // 'a_faire' | 'en_cours' | 'fait'
-  epic: boolean("epic").notNull().default(false), // grosse to-do affichée sur le dashboard
+  domaine: text("domaine"), // 'strategie' | 'sales' | 'delivery' | 'finance_admin' | null
+  owner: text("owner"), // responsable de la tâche (texte libre, ex. prénom), null si non assigné
   ordre: integer("ordre").notNull().default(0),
+  // Macro-tâche parente : null = macro-tâche (carte du Kanban) ; renseigné = sous-tâche.
+  // Supprimer une macro-tâche supprime ses sous-tâches (cascade).
+  parentId: integer("parent_id").references((): AnyPgColumn => todos.id, { onDelete: "cascade" }),
 });
 
 // --- DECAISSEMENTS / ÉCHÉANCIER DE COÛT (versé à un freelance, rattaché à un projet) ---

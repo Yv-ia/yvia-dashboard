@@ -1,5 +1,9 @@
 "use client";
-// Création / édition d'une to-do de pilotage. L'« epic » remonte sur le dashboard.
+// Création / édition d'une to-do de pilotage (macro-tâche ou sous-tâche).
+// Champs : titre, notes, statut, owner. Le domaine (catégorie) ne se change PAS
+// ici — il est piloté par le glisser-déposer entre colonnes du Kanban. Il est
+// conservé tel quel via un champ caché (valeur courante, ou colonne d'origine à
+// la création).
 
 import { useState } from "react";
 import { toast } from "sonner";
@@ -15,7 +19,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { STATUTS_TODO, STATUT_TODO_DEFAUT } from "@/lib/todos/statut";
 import type { Resultat } from "./actions";
 
@@ -24,7 +27,8 @@ type Todo = {
   titre: string;
   description: string | null;
   statut: string;
-  epic: boolean;
+  domaine: string | null;
+  owner: string | null;
 };
 
 export function TodoFormDialog({
@@ -32,16 +36,22 @@ export function TodoFormDialog({
   todo,
   titre,
   trigger,
-  epicParDefaut = false,
+  domaineParDefaut = "",
+  utilisateurs,
 }: {
   action: (formData: FormData) => Promise<Resultat>;
   todo?: Todo;
   titre: string;
   trigger: React.ReactElement;
-  epicParDefaut?: boolean;
+  domaineParDefaut?: string;
+  // Owners proposés (utilisateurs de l'app). « Non assigné » = valeur vide.
+  utilisateurs: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const [epic, setEpic] = useState(todo?.epic ?? epicParDefaut);
+  const optionsOwner = [
+    { value: "", label: "Non assigné" },
+    ...utilisateurs.map((u) => ({ value: u, label: u })),
+  ];
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -65,7 +75,8 @@ export function TodoFormDialog({
           className="space-y-4"
         >
           {todo ? <input type="hidden" name="id" value={todo.id} /> : null}
-          <input type="hidden" name="epic" value={String(epic)} />
+          {/* Catégorie conservée telle quelle : se change via le Kanban, pas ici. */}
+          <input type="hidden" name="domaine" value={todo?.domaine ?? domaineParDefaut} />
 
           <div className="space-y-2">
             <Label htmlFor="titre">Titre *</Label>
@@ -73,7 +84,7 @@ export function TodoFormDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">Notes</Label>
             <textarea
               id="description"
               name="description"
@@ -94,13 +105,14 @@ export function TodoFormDialog({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="epic">Epic (grosse to-do)</Label>
-              <div className="flex h-9 items-center gap-2">
-                <Switch id="epic" checked={epic} onCheckedChange={setEpic} />
-                <span className="text-sm text-muted-foreground">
-                  {epic ? "Affichée sur le dashboard" : "To-do classique"}
-                </span>
-              </div>
+              <Label htmlFor="owner">Owner</Label>
+              <Select
+                id="owner"
+                name="owner"
+                defaultValue={todo?.owner ?? ""}
+                placeholder="Non assigné"
+                options={optionsOwner}
+              />
             </div>
           </div>
 
